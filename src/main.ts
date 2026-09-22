@@ -92,8 +92,7 @@ export default class FeedReaderPlugin extends Plugin {
   onunload(): void {
     this.stopped = true;
     this.scheduler?.dispose(); this.refreshService?.dispose(); this.subscriptions?.stop(); this.saves?.dispose();
-    this.app.workspace.detachLeavesOfType(MANAGE_VIEW);
-    this.app.workspace.detachLeavesOfType(READER_VIEW); this.app.workspace.detachLeavesOfType(SOURCES_VIEW);
+    // Obsidian owns registered leaves; preserve their layout across reloads.
     this.cache?.dispose();
   }
 

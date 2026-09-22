@@ -25,20 +25,20 @@ Git remote 已設定為 [kywk/obsidian-feed-reader](https://github.com/kywk/obsi
 
 1. 建立 GitHub 儲存庫並推送來源；預設分支根目錄必須有 README、LICENSE、manifest。檢查要公開的內容不含私人資訊。
 2. 從已驗證的同一份程式碼建立 GitHub Release，使用符合 manifest 的 tag，填寫功能、限制及驗證範圍。
-3. 將 `main.js`、`manifest.json`、`styles.css` 作為獨立 Release 附件上傳，不能只提供原始碼 ZIP。可另附 LICENSE 與 THIRD_PARTY_NOTICES.md 方便閱讀；安裝用 main.js 已含聲明。
+3. 將 `main.js`、`manifest.json`、`styles.css` 作為獨立 Release 附件上傳，不能只提供原始碼 ZIP。授權檔保留於儲存庫；安裝用 main.js 已含聲明，不額外上傳非安裝附件（官方掃描建議）。
 4. 登入 [Obsidian Community](https://community.obsidian.md/)，連結 GitHub，新增外掛並提交實際儲存庫。確認 `vault-feed-reader` ID 尚未被占用。
 5. 依自動審查提示修正問題、遞增版本並建立新 Release。選擇 Publish 並解決審查錯誤後，才可由 Obsidian 安裝。
 6. 後續版本同步維護版本資訊、雙語 README、授權聲明與驗證記錄，再建立新的 GitHub Release。
 
-Git remote 已設定；Release 建立與官方提交尚未完成。
+0.1.0 Release 與官方提交已完成；該版本未通過自動審查。0.1.1 修正阻擋錯誤，詳見[審查修正記錄](community-review-validation.md)。
 
 ## 尚待發佈前完成
 
-- 確認 GitHub 儲存庫公開可見且 Issues 已啟用。
-- 確認外掛 ID 在官方目錄中的唯一性。
+- 已確認 GitHub 儲存庫公開可見且 Issues 已啟用。
+- 已成功以 `vault-feed-reader` 建立官方目錄項目。
 - 完成本次待發佈版本的 Obsidian 實機驗證及最低版本相容性確認。
 - 完成 OPML 真實匯出檔互通驗證；既有範圍見 [OPML validation](opml-validation.md)。
-- 建立 Release、連結帳號、提交並處理官方審查結果。
+- 0.1.0 Release、帳號連結與提交已完成；仍需新版通過官方審查。
 
 ## 官方依據
 

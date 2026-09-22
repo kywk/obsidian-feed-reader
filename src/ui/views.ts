@@ -3,7 +3,7 @@ import type { Article, ArticleFilter, ArticleSummary, FeedReadState, FeedSource,
 import type { ArticleCache } from '../cache';
 import { effectiveArticleTimestamp, isArticleRead, type ReadStateService } from '../read-state';
 import type { SubscriptionService, SubscriptionSnapshot } from '../subscriptions';
-import { sanitizeArticleHtml } from './content';
+import { sanitizeArticleFragment } from './content';
 
 export const SOURCES_VIEW = 'vault-feed-reader-sources';
 export const READER_VIEW = 'vault-feed-reader-articles';
@@ -491,7 +491,7 @@ export class ReaderView extends ItemView {
     const read = actions.createEl('button', { text: 'Toggle read / unread' });
     read.addEventListener('click', () => void this.toggleRead().catch(error => this.showError(error)));
     const body = reading.createDiv({ cls: 'vfr-article-body markdown-rendered' });
-    body.innerHTML = sanitizeArticleHtml(article.contentHtml, this.sourceUrl(article.feedId));
+    body.append(sanitizeArticleFragment(article.contentHtml, this.sourceUrl(article.feedId)));
     for (const link of body.querySelectorAll('a[href]')) {
       link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
     }

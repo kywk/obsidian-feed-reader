@@ -5,26 +5,35 @@ import createDOMPurify from 'dompurify';
  * Links and images are resolved against the feed article URL and are limited to
  * HTTP(S), which also keeps a saved note from preserving executable schemes.
  */
-export function sanitizeArticleHtml(html: string, baseUrl?: string): string {
-  const purifier = createDOMPurify(window);
-  const clean = purifier.sanitize(html, {
-    USE_PROFILES: { html: true },
-    FORBID_TAGS: ['iframe', 'script', 'object', 'embed', 'base', 'form', 'style'],
-    FORBID_ATTR: ['srcset', 'style', 'class', 'id', 'color', 'bgcolor', 'face', 'size', 'width', 'height'],
-  });
-  const template = document.createElement('template');
-  template.innerHTML = clean;
+const ARTICLE_SANITIZE_OPTIONS = {
+  USE_PROFILES: { html: true },
+  FORBID_TAGS: ['iframe', 'script', 'object', 'embed', 'base', 'form', 'style'],
+  FORBID_ATTR: ['srcset', 'style', 'class', 'id', 'color', 'bgcolor', 'face', 'size', 'width', 'height'],
+};
 
-  for (const element of template.content.querySelectorAll<HTMLElement>('[href], [src]')) {
+function articlePurifier(baseUrl?: string) {
+  const purifier = createDOMPurify(window);
+  purifier.addHook('afterSanitizeAttributes', element => {
     for (const attribute of ['href', 'src'] as const) {
       if (!element.hasAttribute(attribute)) continue;
-      const value = element.getAttribute(attribute) ?? '';
-      const safeUrl = resolveSafeHttpUrl(value, baseUrl);
+      const safeUrl = resolveSafeHttpUrl(element.getAttribute(attribute) ?? '', baseUrl);
       if (safeUrl) element.setAttribute(attribute, safeUrl);
       else element.removeAttribute(attribute);
     }
-  }
-  return template.innerHTML;
+  });
+  return purifier;
+}
+
+export function sanitizeArticleHtml(html: string, baseUrl?: string): string {
+  return articlePurifier(baseUrl).sanitize(html, ARTICLE_SANITIZE_OPTIONS);
+}
+
+/** Uses the same cleaning rules as saved notes without reparsing HTML in the UI. */
+export function sanitizeArticleFragment(html: string, baseUrl?: string): DocumentFragment {
+  return articlePurifier(baseUrl).sanitize(html, {
+    ...ARTICLE_SANITIZE_OPTIONS,
+    RETURN_DOM_FRAGMENT: true,
+  });
 }
 
 function resolveSafeHttpUrl(value: string, baseUrl?: string): string | undefined {

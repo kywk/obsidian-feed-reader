@@ -98,3 +98,5 @@
 .vfr-template-settings textarea { width: min(100%, 36rem); font-family: var(--font-monospace); }
 .vfr-template-settings .setting-item-control { flex-wrap: wrap; }
 .vfr-template-preview { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; padding: var(--size-4-3); background: var(--background-secondary); user-select: text; }
+
+.vfr-subscriptions-document { width: 100%; }

@@ -10,7 +10,8 @@ The MVP and OPML import/export are implemented. The recorded OPML validation pas
 
 - Desktop Obsidian only; declared minimum version: **1.8.7**. This does not mean every desktop version has been tested.
 - No Feedly or other service account is required. Only public HTTP(S) feeds are supported.
-- Not yet published in the Community Plugins directory.
+- Submitted to the Community Plugins directory. Version 0.1.0 failed automated review; 0.1.1 addresses the blocking findings. Approval is pending.
+- Install manually from [GitHub Releases](https://github.com/kywk/obsidian-feed-reader/releases); see [review remediation](docs/community-review-validation.md) for validation scope.
 
 ## Installation and development
 

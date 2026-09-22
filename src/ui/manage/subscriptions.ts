@@ -114,8 +114,7 @@ export class ManageSubscriptionsView extends ItemView {
     let format: SubscriptionFormat = 'yaml', mode: 'merge' | 'replace' = 'merge';
     new Setting(this.contentEl).setName('Format').addDropdown(dropdown => dropdown.addOptions({ yaml: 'YAML', toml: 'TOML', opml: 'OPML' }).onChange(value => { format = value as SubscriptionFormat; }));
     this.contentEl.createEl('p', { text: 'OPML transfers subscriptions only. Nested folders become Parent / Child; repeated feeds keep all folder memberships.' });
-    const area = this.contentEl.createEl('textarea', { attr: { rows: '16', 'aria-label': 'Subscriptions document', spellcheck: 'false' } });
-    area.style.width = '100%';
+    const area = this.contentEl.createEl('textarea', { cls: 'vfr-subscriptions-document', attr: { rows: '16', 'aria-label': 'Subscriptions document', spellcheck: 'false' } });
     new Setting(this.contentEl).setName('Export').setDesc('Generate text to copy, or download a file.')
       .addButton(button => button.setButtonText('Generate export').onClick(() => { try { area.value = this.service.export(format); area.focus(); area.select(); } catch (error) { new Notice(error instanceof Error ? error.message : String(error)); } }))
       .addButton(button => button.setButtonText('Download').onClick(() => {

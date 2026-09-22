@@ -13,7 +13,7 @@ export function isVaultRelative(path: string): boolean {
 export class FeedReaderSettingTab extends PluginSettingTab {
   constructor(app: App, private readonly plugin: FeedReaderPlugin) { super(app, plugin); }
   display(): void {
-    this.containerEl.empty(); this.containerEl.createEl('h2', { text: 'Vault Feed Reader' });
+    this.containerEl.empty(); new Setting(this.containerEl).setName('Vault Feed Reader').setHeading();
     let subscriptionsPath = this.plugin.settings.subscriptionsPath;
     new Setting(this.containerEl).setName('Subscriptions YAML').setDesc('Vault-relative YAML path. Apply validates the file before switching.')
       .addText(text => text.setValue(subscriptionsPath).onChange(value => { subscriptionsPath = value.trim(); }))
@@ -29,7 +29,7 @@ export class FeedReaderSettingTab extends PluginSettingTab {
   }
   private displayNoteTemplates(): void {
     const section = this.containerEl.createDiv({ cls: 'vfr-template-settings' });
-    section.createEl('h3', { text: 'Saved note templates' });
+    new Setting(section).setName('Saved note templates').setHeading();
     section.createEl('p', { text: 'Applies only to newly created notes. Saving an existing article opens its note without replacing your edits.' });
     section.createEl('p', { text: 'Variables: {{title}}, {{feed}}, {{link}}, {{published}}, {{created}}, {{date}}, and {{content}} (body only). Date falls back from publication to first fetch to save date. Dates use UTC; optional formats: YYYY-MM-DD, YYYY-MM-DD HH:mm, YYYY-MM-DD HH:mm:ss, YYYY-MM-DDTHH:mm:ss. Example: {{created:YYYY-MM-DD}}.' });
     const draft: NoteTemplates = {
@@ -58,7 +58,7 @@ export class FeedReaderSettingTab extends PluginSettingTab {
         editors.push({ key: 'notePropertiesTemplate', setValue: value => text.setValue(value) });
       });
     const status = section.createDiv({ attr: { role: 'status', 'aria-live': 'polite' } });
-    section.createEl('h4', { text: 'Preview · example article' });
+    new Setting(section).setName('Preview · example article').setHeading();
     section.createEl('p', { text: 'Exact Markdown output using sample data. No file is created; actual filename collisions may add a suffix.' });
     const previewPath = section.createEl('code');
     const preview = section.createEl('pre', { cls: 'vfr-template-preview' });

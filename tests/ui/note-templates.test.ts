@@ -14,6 +14,7 @@ vi.mock('obsidian', () => ({
     el: HTMLElement;
     constructor(parent: HTMLElement) { this.el = document.createElement('div'); parent.append(this.el); }
     setName(value: string) { const el = document.createElement('span'); el.textContent = value; this.el.append(el); return this; }
+    setHeading() { this.el.classList.add('setting-item-heading'); return this; }
     setDesc(value: string) { return this.setName(value); }
     addText(configure: (text: unknown) => void) { return this.addInput('input', configure); }
     addTextArea(configure: (text: unknown) => void) { return this.addInput('textarea', configure); }
