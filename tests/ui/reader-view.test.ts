@@ -8,6 +8,8 @@ vi.mock('obsidian', () => ({
     constructor(leaf: { contentEl: HTMLElement }) { this.contentEl = leaf.contentEl; }
   },
   WorkspaceLeaf: class {},
+  Modal: class {},
+  requestUrl: vi.fn(),
   Notice: class {},
   setIcon: () => {},
   Setting: class {

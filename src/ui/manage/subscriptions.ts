@@ -1,10 +1,14 @@
-import { ItemView, WorkspaceLeaf, Notice, Setting } from 'obsidian';
+import { ItemView, WorkspaceLeaf, Notice, Setting, requestUrl } from 'obsidian';
 import type { FeedSource } from '../../domain/models';
 import type { SubscriptionService, SubscriptionFormat } from '../../subscriptions';
+
+import { AddSourceModal } from './source-modal';
+import { createObsidianFeedTransport, type FeedTransport } from '../../feeds/transport';
 
 export const MANAGE_VIEW = 'vault-feed-reader-manage';
 
 export class ManageSubscriptionsView extends ItemView {
+  private addModal?: AddSourceModal;
   private off?: () => void;
   private closed = false;
   private page: 'list' | 'edit' | 'transfer' | 'confirm' = 'list';
@@ -12,7 +16,7 @@ export class ManageSubscriptionsView extends ItemView {
   private section: 'sources' | 'folders' = 'sources';
   private query = '';
   private offset = 0;
-  constructor(leaf: WorkspaceLeaf, private readonly service: SubscriptionService, private readonly refresh: (sources: readonly FeedSource[]) => Promise<void>) { super(leaf); }
+  constructor(leaf: WorkspaceLeaf, private readonly service: SubscriptionService, private readonly refresh: (sources: readonly FeedSource[]) => Promise<void>, private readonly transport: FeedTransport = createObsidianFeedTransport(requestUrl)) { super(leaf); }
   getViewType(): string { return MANAGE_VIEW; }
   getDisplayText(): string { return 'Manage RSS sources'; }
   getIcon(): string { return 'list-tree'; }
@@ -22,7 +26,7 @@ export class ManageSubscriptionsView extends ItemView {
     this.off = this.service.subscribe(() => { if (this.page === 'list' && !this.closed) this.render(); });
     this.render();
   }
-  async onClose(): Promise<void> { this.closed = true; this.off?.(); this.contentEl.empty(); }
+  async onClose(): Promise<void> { this.closed = true; this.addModal?.close(); this.off?.(); this.contentEl.empty(); }
   private async run(action: () => Promise<unknown>, after: () => void = () => this.render()): Promise<void> {
     if (this.closed || this.busy) return;
     this.busy = true;
@@ -39,7 +43,7 @@ export class ManageSubscriptionsView extends ItemView {
     const snapshot = this.service.getSnapshot(), locked = !snapshot.writable;
     if (snapshot.error) this.contentEl.createEl('p', { cls: 'vfr-error', text: `${snapshot.error.path}: ${snapshot.error.message}. Fix the file to enable changes.` });
     new Setting(this.contentEl).setName('Sources')
-      .addButton(button => button.setButtonText('Add source').setDisabled(locked).onClick(() => this.editFeed()))
+      .addButton(button => button.setButtonText('Add source').setDisabled(locked).onClick(() => this.addFeed()))
       .addButton(button => button.setButtonText('Refresh all').onClick(() => { void this.run(() => this.refresh(this.service.getSnapshot().document.feeds)); }))
       .addButton(button => button.setButtonText('Import / export').onClick(() => this.transfer()));
     const tabs = this.contentEl.createDiv({ cls: 'vfr-manager-tabs' });
@@ -88,20 +92,25 @@ export class ManageSubscriptionsView extends ItemView {
         .addButton(button => button.setButtonText('Delete folder').setDisabled(locked).onClick(() => this.confirm(`Delete ${folder.title}?`, 'Sources stay subscribed. Only folder memberships are removed.', () => this.service.deleteFolder(folder.id))));
     }
   }
-  private editFeed(feed?: FeedSource): void {
-    this.heading(feed ? 'Edit source and folders' : 'Add RSS / Atom source', 'edit');
-    let title = feed?.title ?? '', url = feed?.url ?? '';
-    const folders = new Set(feed?.folderIds ?? []);
+  private addFeed(): void {
+    this.addModal?.close();
+    this.addModal = new AddSourceModal(this.app, this.service, this.refresh, this.transport);
+    this.addModal.open();
+  }
+  private editFeed(feed: FeedSource): void {
+    this.heading('Edit source and folders', 'edit');
+    let title = feed.title;
+    const url = feed.url;
+    const folders = new Set(feed.folderIds);
     new Setting(this.contentEl).setName('Title').addText(text => text.setValue(title).onChange(value => { title = value; }));
-    new Setting(this.contentEl).setName('Feed URL').setDesc(feed ? 'The URL defines source identity. To change it, unsubscribe and add a new source.' : 'Enter an RSS or Atom URL.')
-      .addText(text => text.setValue(url).setPlaceholder('https://example.com/feed.xml').setDisabled(Boolean(feed)).onChange(value => { url = value; }));
+    new Setting(this.contentEl).setName('Feed URL').setDesc('The URL defines source identity. To change it, unsubscribe and add a new source.')
+      .addText(text => text.setValue(url).setPlaceholder('https://example.com/feed.xml').setDisabled(true));
     this.contentEl.createEl('p', { text: 'Choose any number of folders. Unchecking a folder only removes its association.' });
     for (const folder of this.service.getSnapshot().document.folders) new Setting(this.contentEl).setName(folder.title)
       .addToggle(toggle => toggle.setValue(folders.has(folder.id)).onChange(value => { if (value) folders.add(folder.id); else folders.delete(folder.id); }));
-    new Setting(this.contentEl).addButton(button => button.setButtonText(feed ? 'Save source' : 'Add source').setCta().setDisabled(!this.service.getSnapshot().writable).onClick(() => {
+    new Setting(this.contentEl).addButton(button => button.setButtonText('Save source').setCta().setDisabled(!this.service.getSnapshot().writable).onClick(() => {
       void this.run(async () => {
-        if (feed) await this.service.updateFeed(feed.id, { title, folderIds: [...folders] });
-        else { const source = await this.service.addFeed({ title, url, folderIds: [...folders] }); await this.refresh([source]); }
+        await this.service.updateFeed(feed.id, { title, folderIds: [...folders] });
       });
     }));
   }
