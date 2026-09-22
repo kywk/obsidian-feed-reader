@@ -4,7 +4,9 @@ Obsidian 桌面版 RSS／Atom reader。訂閱、閱讀狀態與保存筆記留�
 
 ## 目前狀態
 
-MVP 核心功能與 Obsidian 主要流程 smoke 已完成；build、72 個一般測試與先前的 2 個規模測試通過。完整結果與未驗證項記錄在 [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md)，未驗證項不視為通過。
+MVP 與 OPML 匯入／匯出已實作；OPML 完整工作區 build 與 90 個一般測試通過，1 個 opt-in scale 略過。OPML 尚未做 Obsidian 實機或真實匯出檔互通驗證，詳見 [OPML validation](docs/opml-validation.md)。先前 MVP 實機流程與 2 個模擬規模測試見 [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md)，未驗證項不視為通過。
+
+開發前閱讀 [AGENTS.md](AGENTS.md)；提交與驗收規範由該檔按需導引。歷次成果與提交脈絡見 [進展索引](docs/progress.md)。
 
 ## 開發與本機安裝
 
