@@ -48,7 +48,9 @@ Interface language does not translate feed content, source/folder names, existin
 3. Select a source to show its full-width article list. Select an article to read it and mark it as read. Filters include all, unread, read, today, and saved; you can also filter by source/folder and search titles. Selecting a source reopens a closed reader or reuses an existing one.
 4. Press `s` to save the feed-provided article body or summary as Markdown. Saving an already saved article opens its existing note without overwriting manual edits. The saved list does not depend on the article remaining in the cache.
 
-The reader hides the extra Obsidian view-header row to leave more room for content. The article view provides **Back to list**, **Previous**, and **Next**. Press `Esc` to return to the list with the selection preserved. Search, filters, and bulk **Reading actions** are available in the list view.
+Manage sources, Refresh, and Mark scope read are icon buttons aligned to the right of the Feeds heading; hover to see their labels. The reader hides the extra Obsidian view-header row to leave more room for content. The article view provides **Back to list**, **Previous**, and **Next**. Press `Esc` to return to the list with the selection preserved. Search, filters, and bulk **Reading actions** are available in the list view.
+
+Article actions stay on one line with short labels (Original, URL, Markdown, Save, Read / unread); narrow panes scroll horizontally. Hover for full descriptions. Article actions include icons, **Copy original URL**, and **Copy Markdown link** (`[title](origin-url)`). Both copy buttons require a valid HTTP(S) original URL; success or clipboard failure is reported.
 
 Lists show up to 50 articles per page and load full content on demand. Navigation with `j/k` crosses page boundaries. The cache retains the latest 500 articles per source; eviction does not delete reading state or saved notes. An article just marked as read stays in the unread list until you reapply filters or change sources.
 

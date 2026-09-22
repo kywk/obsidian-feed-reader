@@ -219,5 +219,14 @@ export const zhTW = {
   "Property names cannot contain template variables": "屬性名稱不可包含模板變數",
   "Templates must be text": "模板必須是文字",
   "Filename template cannot be empty": "檔名模板不可空白",
-  "Body template cannot be empty": "正文模板不可空白"
+  "Body template cannot be empty": "正文模板不可空白",
+  "Copy original URL": "複製原文網址",
+  "Copy Markdown link": "複製 Markdown 連結",
+  "Copied to clipboard": "已複製到剪貼簿",
+  "Could not copy to clipboard. Please try again.": "無法複製到剪貼簿，請再試一次。",
+  "Original": "原文",
+  "URL": "網址",
+  "Markdown": "Markdown",
+  "Save": "保存",
+  "Read / unread": "已讀／未讀"
 } as const;

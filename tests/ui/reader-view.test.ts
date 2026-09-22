@@ -347,3 +347,28 @@ it('renders Chinese navigation without translating source names', async () => {
     expect(contentEl.querySelector('[aria-label="展開／收合 My folder"]')).not.toBeNull();
   } finally { await view.onClose(); configureLanguage('en', 'en'); }
 });
+
+it('copies the original URL and Markdown link from article actions', async () => {
+  const writeText = vi.fn(async (_value: string) => {});
+  Object.defineProperty(window.navigator, 'clipboard', { configurable: true, value: { writeText } });
+  const root = document.createElement('div');
+  const item = { ...summary(1), title: 'A [title]', url: 'https://example.com/a(b)' };
+  const view = new ReaderView({ contentEl: root } as never, {
+    cache: { queryMetadata: async () => ({ items: [item] }), getArticle: async () => ({ ...item, contentHtml: '<p>Body</p>' }) },
+    subscriptions: { getSnapshot: () => ({ writable: true, document: { version: 1, feeds: [feed], folders: [] } }), subscribe: () => () => {} },
+  });
+  try {
+    await view.onOpen();
+    root.querySelector<HTMLButtonElement>('.vfr-article-row')!.click();
+    await vi.waitFor(() => expect(root.querySelector('[aria-label="Copy original URL"]')).not.toBeNull());
+    root.querySelector<HTMLButtonElement>('[aria-label="Copy original URL"]')!.click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(item.url));
+    const markdown = root.querySelector<HTMLButtonElement>('[aria-label="Copy Markdown link"]')!;
+    markdown.click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith('[A \\[title\\]](https://example.com/a%28b%29)'));
+    expect(root.querySelectorAll('.vfr-article-actions .vfr-action-icon')).toHaveLength(5);
+    writeText.mockRejectedValueOnce(new Error('denied'));
+    markdown.click();
+    await vi.waitFor(() => expect(markdown.disabled).toBe(false));
+  } finally { await view.onClose(); }
+});

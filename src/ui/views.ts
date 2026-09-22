@@ -5,6 +5,7 @@ import type { ArticleCache } from '../cache';
 import { effectiveArticleTimestamp, isArticleRead, type ReadStateService } from '../read-state';
 import type { SubscriptionService, SubscriptionSnapshot } from '../subscriptions';
 import { sanitizeArticleFragment } from './content';
+import { articleMarkdownLink } from './links';
 
 export const SOURCES_VIEW = 'vault-feed-reader-sources';
 export const READER_VIEW = 'vault-feed-reader-articles';
@@ -128,13 +129,14 @@ export class SourcesView extends ItemView {
     for (const [filter, icon] of [['today', 'calendar-days'], ['unread', 'circle-dot'], ['saved', 'bookmark'], ['read', 'history']] as const) {
       this.row(nav, labelForFilter(filter), icon, { kind: 'global', filter });
     }
-    const actions = root.createDiv({ cls: 'vfr-sidebar-tools' });
-    this.action(actions, t("Manage sources"), 'list-plus', () => this.dependencies.onManageSubscriptions?.());
-    this.action(actions, t("Refresh"), 'refresh-cw', () => this.dependencies.onRefresh?.(snapshot?.document.feeds ?? []));
-    this.action(actions, t("Mark scope read"), 'check-check', () => this.state.requestMarkAllRead());
+    const feedHeading = root.createDiv({ cls: 'vfr-feeds-heading' });
+    feedHeading.createSpan({ cls: 'vfr-section-label', text: t('Feeds') });
+    const actions = feedHeading.createDiv({ cls: 'vfr-sidebar-tools' });
+    this.action(actions, t("Manage sources"), 'list-plus', () => this.dependencies.onManageSubscriptions?.(), true);
+    this.action(actions, t("Refresh"), 'refresh-cw', () => this.dependencies.onRefresh?.(snapshot?.document.feeds ?? []), true);
+    this.action(actions, t("Mark scope read"), 'check-check', () => this.state.requestMarkAllRead(), true);
     if (!snapshot) { root.createEl('p', { text: t("Reader services are not available yet.") }); return; }
     if (snapshot.error) root.createEl('p', { cls: 'vfr-error', text: snapshot.error.message });
-    root.createDiv({ cls: 'vfr-section-label', text: t("Feeds") });
     this.row(root, t("All articles"), 'list-filter', { kind: 'global', filter: 'all' }, snapshot.document.feeds.map(feed => feed.id));
     if (!snapshot.document.feeds.length) root.createEl('p', { cls: 'vfr-empty-sources', text: t("Add your first source to start reading.") });
     for (const folder of snapshot.document.folders) {
@@ -179,10 +181,10 @@ export class SourcesView extends ItemView {
     if (feedIds) button.createSpan({ cls: 'vfr-unread-count', text: feedIds.every(id => this.counts.has(id)) ? String(feedIds.reduce((sum, id) => sum + this.counts.get(id)!, 0)) : '', attr: { 'data-count-feeds': JSON.stringify(feedIds), 'aria-label': 'Unread articles' } });
     return button;
   }
-  private action(parent: HTMLElement, title: string, icon: string | undefined, click: () => unknown): HTMLButtonElement {
-    const button = parent.createEl('button', { cls: 'vfr-nav-row tree-item-self', attr: { title } });
+  private action(parent: HTMLElement, title: string, icon: string | undefined, click: () => unknown, iconOnly = false): HTMLButtonElement {
+    const button = parent.createEl('button', { cls: iconOnly ? 'vfr-sidebar-action clickable-icon' : 'vfr-nav-row tree-item-self', attr: { title, 'aria-label': title } });
     if (icon) setIcon(button.createSpan({ cls: 'vfr-nav-icon' }), icon);
-    button.createSpan({ cls: 'vfr-nav-label tree-item-inner', text: title });
+    if (!iconOnly) button.createSpan({ cls: 'vfr-nav-label tree-item-inner', text: title });
     button.addEventListener('click', () => { void Promise.resolve().then(click).catch(error => new Notice(message(error))); });
     return button;
   }
@@ -484,12 +486,32 @@ export class ReaderView extends ItemView {
     reading.createEl('h1', { text: article.title || t("Untitled article") });
     const actions = reading.createDiv({ cls: 'vfr-article-actions' });
     if (article.url && isSafeHttpUrl(article.url)) {
-      const link = actions.createEl('a', { text: t("Open original"), href: article.url });
+      const link = actions.createEl('a', { text: t("Original"), href: article.url, attr: { title: t("Open original"), 'aria-label': t("Open original") } });
       link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
+      addActionIcon(link, 'external-link');
+      const copy = (text: string, label: string, icon: string, value: string): void => {
+        const button = actions.createEl('button', { text, attr: { title: label, 'aria-label': label } });
+        addActionIcon(button, icon);
+        button.addEventListener('click', () => {
+          void (async () => {
+            button.disabled = true;
+            try {
+              await button.ownerDocument.defaultView!.navigator.clipboard.writeText(value);
+              if (!this.closed) new Notice(t('Copied to clipboard'));
+            } catch {
+              if (!this.closed) new Notice(t('Could not copy to clipboard. Please try again.'));
+            } finally { button.disabled = false; }
+          })();
+        });
+      };
+      copy(t('URL'), t('Copy original URL'), 'copy', article.url);
+      copy(t('Markdown'), t('Copy Markdown link'), 'link', articleMarkdownLink(article.title || t('Untitled article'), article.url));
     }
-    const save = actions.createEl('button', { text: t("Save / open note") });
+    const save = actions.createEl('button', { text: t("Save"), attr: { title: t("Save / open note"), 'aria-label': t("Save / open note") } });
+    addActionIcon(save, 'bookmark');
     save.addEventListener('click', () => void Promise.resolve(this.dependencies.onSaveArticle?.(article)).catch(error => this.showError(error)));
-    const read = actions.createEl('button', { text: t("Toggle read / unread") });
+    const read = actions.createEl('button', { text: t("Read / unread"), attr: { title: t("Toggle read / unread"), 'aria-label': t("Toggle read / unread") } });
+    addActionIcon(read, 'check-check');
     read.addEventListener('click', () => void this.toggleRead().catch(error => this.showError(error)));
     const body = reading.createDiv({ cls: 'vfr-article-body markdown-rendered' });
     body.append(sanitizeArticleFragment(article.contentHtml, this.sourceUrl(article.feedId)));
@@ -596,4 +618,10 @@ function isToday(article: ArticleSummary, now = new Date()): boolean {
 function formatDate(article: ArticleSummary): string {
   const date = new Date(effectiveArticleTimestamp(article));
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString(getLocale()) : '';
+}
+
+function addActionIcon(element: HTMLElement, icon: string): void {
+  const glyph = element.createSpan({ cls: 'vfr-action-icon', attr: { 'aria-hidden': 'true' } });
+  setIcon(glyph, icon);
+  element.prepend(glyph);
 }
