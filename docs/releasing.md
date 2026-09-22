@@ -51,3 +51,7 @@ Git remote 已設定為 [kywk/obsidian-feed-reader](https://github.com/kywk/obsi
 ## 0.2.0
 
 已合併 main 並公開 GitHub Release，版本與三個安裝附件一致；已通知 Obsidian 檢查新版，官方自動審查 Pending。詳見 [發布紀錄](history/2026-09-22-article-enrichment/release-0.2.0.md)。0.1.2 審查已完成，舊段落的 pending 描述為當時狀態。
+
+## 0.3.0
+
+英文與繁體中文介面已發布至 [GitHub Release](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.3.0)，三個附件雜湊比對一致。本次未操作官方目錄送審。詳見 [發布紀錄](release-0.3.0.md) 與 [驗證範圍](i18n-validation.md)。
