@@ -63,7 +63,7 @@ export function renderProperties(template: string, context: TemplateContext): Re
     throw new Error('Property values must be text, numbers, booleans, null, or lists of these values');
   };
   for (const [key, item] of Object.entries(value)) {
-    if (!key.trim() || key === 'title' || key.startsWith('feed_reader_') || ['__proto__', 'constructor', 'prototype'].includes(key)) {
+    if (!key.trim() || key === 'title' || key.startsWith('feed_reader_') || ['date_created', 'date_updated', '__proto__', 'constructor', 'prototype'].includes(key)) {
       throw new Error(`Property "${key}" is reserved or invalid`);
     }
     if (key.includes('{{') || key.includes('}}')) throw new Error('Property names cannot contain template variables');
@@ -73,7 +73,10 @@ export function renderProperties(template: string, context: TemplateContext): Re
 }
 
 export function validateNoteTemplates(templates: NoteTemplates): void {
-  for (const value of Object.values(templates)) if (typeof value !== 'string') throw new Error('Templates must be text');
+  // Callers may supply structurally compatible plugin settings with non-template fields.
+  for (const key of ['noteFilenameTemplate', 'noteBodyTemplate', 'notePropertiesTemplate'] as const) {
+    if (typeof templates[key] !== 'string') throw new Error('Templates must be text');
+  }
   if (!templates.noteFilenameTemplate.trim()) throw new Error('Filename template cannot be empty');
   if (!templates.noteBodyTemplate.trim()) throw new Error('Body template cannot be empty');
   const context: TemplateContext = { title: 'Example article', feed: 'Example feed', link: 'https://example.com/article', published: '2026-09-20T08:30:00.000Z', created: '2026-09-22T02:03:04.000Z', date: '2026-09-20', content: 'Example article content.' };

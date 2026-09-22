@@ -66,11 +66,11 @@ export function renderArticleNote(
     feed_reader_article_id: article.id,
     feed_reader_source_id: source.id,
     feed_reader_source: source.title,
-    feed_reader_first_fetched_at: article.firstFetchedAt,
+    date_created: note.savedAt,
+    date_updated: note.savedAt,
   };
   if (article.url) frontmatter.feed_reader_url = article.url;
   if (article.publishedAt) frontmatter.feed_reader_published_at = article.publishedAt;
-  frontmatter.feed_reader_saved_at = note.savedAt;
 
   const cleanHtml = sanitize(article.contentHtml, source.url);
   const body = turndown.turndown(cleanHtml).trim();

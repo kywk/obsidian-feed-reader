@@ -14,7 +14,7 @@ function savedArticleFromFrontmatter(path: string, frontmatter: Record<string, u
   const feedId = metadataString(frontmatter.feed_reader_source_id);
   const title = metadataString(frontmatter.title);
   const sourceTitle = metadataString(frontmatter.feed_reader_source);
-  const savedAt = metadataString(frontmatter.feed_reader_saved_at);
+  const savedAt = metadataString(frontmatter.date_created) ?? metadataString(frontmatter.feed_reader_saved_at);
   if (!articleKey || !articleId || !feedId || !title || !sourceTitle || !savedAt) return undefined;
   const firstFetchedAt = metadataString(frontmatter.feed_reader_first_fetched_at) ?? savedAt;
 

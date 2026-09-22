@@ -6,11 +6,20 @@ import { articleKey, renderArticleNote, renderNoteFilename } from '../../src/sav
 const context: TemplateContext = { title: 'A title', feed: 'News', link: 'https://example.com/', published: '', created: '2026-09-22T02:03:04.000Z', date: '2026-09-21', content: '**Article**' };
 
 describe('note templates', () => {
+  it('still rejects missing or non-text template fields', () => {
+    for (const key of ['noteFilenameTemplate', 'noteBodyTemplate', 'notePropertiesTemplate'] as const) {
+      for (const value of [undefined, null, false, {}]) {
+        const malformed = { ...DEFAULT_NOTE_TEMPLATES, [key]: value };
+        expect(() => validateNoteTemplates(malformed as unknown as typeof DEFAULT_NOTE_TEMPLATES)).toThrow('Templates must be text');
+      }
+    }
+  });
+
   it('rejects unknown variables, malformed expressions, unsupported formats and reserved properties', () => {
     for (const body of ['{{author}}', '{{title', '{{title:yaml}}', '{{created:bad}}']) {
       expect(() => validateNoteTemplates({ ...DEFAULT_NOTE_TEMPLATES, noteBodyTemplate: body })).toThrow();
     }
-    for (const yaml of ['title: changed', 'feed_reader_id: changed', 'tags: one\ntags: two', '- not-a-mapping', 'nested:\n  value: no']) {
+    for (const yaml of ['title: changed', 'date_created: changed', 'date_updated: changed', 'feed_reader_id: changed', 'tags: one\ntags: two', '- not-a-mapping', 'nested:\n  value: no']) {
       expect(() => renderProperties(yaml, context)).toThrow();
     }
     expect(() => renderTemplate('{{content}}', context, 'filename')).toThrow(/body/);

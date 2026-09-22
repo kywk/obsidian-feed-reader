@@ -94,6 +94,24 @@ function frontmatter(markdown: string): Record<string, unknown> {
 }
 
 describe('ArticleSaveService', () => {
+  it('saves and reopens when the template callback returns the full plugin settings', async () => {
+    const storage = new MemorySavedNoteStorage();
+    const settings = {
+      ...DEFAULT_NOTE_TEMPLATES,
+      subscriptionsPath: 'Feed Reader/feeds.yaml',
+      savedArticlesFolder: 'Feed Reader/Articles',
+      markReadOnNavigate: true,
+      enrichment: { rules: [], summaryPrompt: '摘要' },
+    };
+    const saver = new ArticleSaveService(storage, { folder: settings.savedArticlesFolder, sanitize: html => html, templates: () => settings });
+    const saved = await saver.save(article(), source);
+    expect(saved.created).toBe(true);
+    expect(storage.files.get(saved.note.path)).toContain('Hello **reader**');
+    storage.files.set(saved.note.path, 'Human edit');
+    expect((await saver.save(article(), source)).created).toBe(false);
+    expect(storage.files.get(saved.note.path)).toBe('Human edit');
+  });
+
   it('deduplicates simultaneous and repeated saves without replacing the note', async () => {
     const storage = new MemorySavedNoteStorage();
     let releaseCreate!: () => void;
@@ -164,8 +182,11 @@ describe('ArticleSaveService', () => {
       feed_reader_source: unusualSource.title,
       feed_reader_url: unusual.url,
       feed_reader_published_at: unusual.publishedAt,
-      feed_reader_saved_at: '2026-09-22T02:03:04.000Z',
+      date_created: '2026-09-22T02:03:04.000Z',
+      date_updated: '2026-09-22T02:03:04.000Z',
     });
+    expect(parsed).not.toHaveProperty('feed_reader_saved_at');
+    expect(parsed).not.toHaveProperty('feed_reader_first_fetched_at');
   });
 
   it('sanitizes against the article URL before conversion and explains empty content', async () => {
