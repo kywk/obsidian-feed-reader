@@ -43,3 +43,7 @@ OPML 三筆提交的共同驗證在分批前的完整工作區執行：build 通
 ## 0.2.0 發布
 
 發布 commit 33e6626；[GitHub Release](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.2.0) 已公開，三附件雜湊比對通過。官方已排入 0.2.0 自動掃描，狀態與限制见 [發布紀錄](history/2026-09-22-article-enrichment/release-0.2.0.md)。
+
+## 0.3.0 多語系
+
+新增英文、繁體中文與跟隨 Obsidian 的語言設定，涵蓋閱讀器、管理頁、設定及命令。語言於重新啟用插件後套用，保留未套用草稿與原始筆記資料。發布前完整工作區 build 通過，191 tests passed、1 scale skipped；範圍與實機未測項見 [多語系驗證](i18n-validation.md)。

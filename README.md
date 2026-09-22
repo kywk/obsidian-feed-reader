@@ -4,6 +4,8 @@
 
 A desktop RSS and Atom reader for Obsidian, built for browsing many feeds and saving selected articles as Markdown. Subscriptions, reading state, and saved notes live in your vault; article content is cached locally in IndexedDB.
 
+Version 0.3.0 adds English and Traditional Chinese interfaces, with automatic Obsidian language detection and a manual language preference.
+
 ## Status and requirements
 
 The MVP and OPML import/export are implemented. The recorded OPML validation passed the build and 90 regular tests, with one opt-in scale test skipped. OPML has not yet been tested in Obsidian or against real exports from other readers. See [OPML validation](docs/opml-validation.md) and the earlier [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md) for the scope and limitations of previous checks.
@@ -32,6 +34,12 @@ npm run dev
 Copy `main.js`, `manifest.json`, and `styles.css` into `.obsidian/plugins/vault-feed-reader/` in a test vault. Enable **Vault Feed Reader** under Settings → Community plugins. Disable and re-enable the plugin after replacing its files.
 
 For release preparation, see the [publishing checklist](docs/releasing.md). Contributors should start with [AGENTS.md](AGENTS.md); the behavior contract is in [SPEC.md](SPEC.md), and recorded development progress is indexed in [docs/progress.md](docs/progress.md).
+
+## Interface language
+
+English and Traditional Chinese are supported across the reader, subscription manager, settings, and commands. In **Settings → Vault Feed Reader → Language**, choose **Follow Obsidian** (default), **English**, or **繁體中文**. Disable and re-enable the plugin after changing the language. Unsupported Obsidian languages fall back to English.
+
+Interface language does not translate feed content, source/folder names, existing notes, templates, or the configured summary prompt. Technical diagnostics from parsers, storage, and external tools may retain their original language.
 
 ## Reading feeds
 
@@ -85,9 +93,9 @@ The reader uses feed-provided content or summaries. Separate note commands can r
 
 Open a saved feed or Web Clipper Markdown note, then use the Obsidian command palette (`Cmd+P` on macOS; your configured shortcut elsewhere):
 
-- **抓取原文全文**: retrieve the public article and replace its recognized original-text section, or append one.
-- **產生 AI 摘要**: summarize recognized full text. If none is recognized, fetch in the background and write only the summary; the fetched full text is not added.
-- **抓取全文並摘要**: fetch, then summarize; a failure leaves the note unchanged.
+- **Fetch original full text**: retrieve the public article and replace its recognized original-text section, or append one.
+- **Generate AI summary**: summarize recognized full text. If none is recognized, fetch in the background and write only the summary; the fetched full text is not added.
+- **Fetch full text and summarize**: fetch, then summarize; a failure leaves the note unchanged.
 
 These commands are unavailable in the reader. They do not change feed caching, reading state, or the existing Save behavior.
 

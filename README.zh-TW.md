@@ -4,6 +4,14 @@
 
 Obsidian 桌面版 RSS／Atom reader。訂閱、閱讀狀態與保存筆記留在 vault；文章內容快取存在本機 IndexedDB。
 
+0.3.0 新增英文與繁體中文介面，可跟隨 Obsidian 語言或手動選擇。
+
+## 介面語言
+
+支援英文與繁體中文，涵蓋閱讀器、訂閱管理、設定與命令。在「設定 → Vault Feed Reader → 語言」選擇「跟隨 Obsidian」（預設）、English 或繁體中文；變更後請停用並重新啟用插件。不支援的 Obsidian 語言會使用英文。
+
+介面語言不會翻譯來源內容、來源／資料夾名稱、既有筆記、模板或摘要提示詞。解析器、儲存與外部工具的技術錯誤訊息可能保留原始語言。
+
 ## 目前狀態
 
 MVP 與 OPML 匯入／匯出已實作；OPML 完整工作區 build 與 90 個一般測試通過，1 個 opt-in scale 略過。OPML 尚未做 Obsidian 實機或真實匯出檔互通驗證，詳見 [OPML validation](docs/opml-validation.md)。先前 MVP 實機流程與 2 個模擬規模測試見 [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md)，未驗證項不視為通過。
