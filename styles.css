@@ -1,3 +1,8 @@
+/* The reader provides its own navigation; omit Obsidian's duplicate title row. */
+.workspace-leaf-content[data-type="vault-feed-reader-articles"] > .view-header {
+  display: none;
+}
+
 .vfr-reader {
   display: grid;
   grid-template-columns: minmax(220px, 32%) minmax(0, 1fr);
