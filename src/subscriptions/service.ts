@@ -243,6 +243,22 @@ export class SubscriptionService {
   async import(text: string, format: SubscriptionFormat, mode: ImportMode): Promise<SubscriptionDocument> {
     const incoming = parseSubscriptions(text, format);
     await this.mutate(draft => {
+      if (format === 'opml') {
+        const remap = new Map<string, string>();
+        for (const folder of incoming.folders) {
+          const matches = draft.folders.filter(existing => existing.title === folder.title);
+          if (matches.length > 1) throw new SubscriptionDocumentError(`Ambiguous existing folder title: ${folder.title}`);
+          const existing = matches[0];
+          let id = existing?.id ?? folder.id;
+          while ((!existing && draft.folders.some(item => item.id === id)) || [...remap.values()].includes(id)) id += '-opml';
+          remap.set(folder.id, id);
+        }
+        for (const folder of incoming.folders) folder.id = remap.get(folder.id)!;
+        for (const feed of incoming.feeds) {
+          feed.folderIds = feed.folderIds.map(id => remap.get(id)!);
+          feed.id = this.identities.get(feed.url) ?? feed.id;
+        }
+      }
       if (mode === 'replace') {
         draft.folders = incoming.folders.map(folder => ({ ...folder }));
         draft.feeds = incoming.feeds.map(feed => ({ ...feed, folderIds: [...feed.folderIds] }));

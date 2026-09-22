@@ -112,18 +112,21 @@ export class ManageSubscriptionsView extends ItemView {
   private transfer(): void {
     this.heading('Import / export subscriptions', 'transfer');
     let format: SubscriptionFormat = 'yaml', mode: 'merge' | 'replace' = 'merge';
-    new Setting(this.contentEl).setName('Format').addDropdown(dropdown => dropdown.addOptions({ yaml: 'YAML', toml: 'TOML' }).onChange(value => { format = value as SubscriptionFormat; }));
+    new Setting(this.contentEl).setName('Format').addDropdown(dropdown => dropdown.addOptions({ yaml: 'YAML', toml: 'TOML', opml: 'OPML' }).onChange(value => { format = value as SubscriptionFormat; }));
+    this.contentEl.createEl('p', { text: 'OPML transfers subscriptions only. Nested folders become Parent / Child; repeated feeds keep all folder memberships.' });
     const area = this.contentEl.createEl('textarea', { attr: { rows: '16', 'aria-label': 'Subscriptions document', spellcheck: 'false' } });
     area.style.width = '100%';
     new Setting(this.contentEl).setName('Export').setDesc('Generate text to copy, or download a file.')
-      .addButton(button => button.setButtonText('Generate export').onClick(() => { area.value = this.service.export(format); area.focus(); area.select(); }))
+      .addButton(button => button.setButtonText('Generate export').onClick(() => { try { area.value = this.service.export(format); area.focus(); area.select(); } catch (error) { new Notice(error instanceof Error ? error.message : String(error)); } }))
       .addButton(button => button.setButtonText('Download').onClick(() => {
-        const objectUrl = URL.createObjectURL(new Blob([this.service.export(format)], { type: 'text/plain;charset=utf-8' }));
+        let contents: string;
+        try { contents = this.service.export(format); } catch (error) { new Notice(error instanceof Error ? error.message : String(error)); return; }
+        const objectUrl = URL.createObjectURL(new Blob([contents], { type: format === 'opml' ? 'text/x-opml;charset=utf-8' : 'text/plain;charset=utf-8' }));
         const link = this.contentEl.createEl('a', { attr: { href: objectUrl, download: `feeds.${format}` } }); link.click(); link.remove(); URL.revokeObjectURL(objectUrl);
       }));
     new Setting(this.contentEl).setName('Import mode').setDesc('Merge preserves existing source identity and folder associations.')
       .addDropdown(dropdown => dropdown.addOptions({ merge: 'Merge', replace: 'Replace all subscriptions' }).onChange(value => { mode = value as typeof mode; }));
-    const file = this.contentEl.createEl('input', { type: 'file', attr: { accept: '.yaml,.yml,.toml', 'aria-label': 'Choose subscriptions file' } });
+    const file = this.contentEl.createEl('input', { type: 'file', attr: { accept: '.yaml,.yml,.toml,.opml,.xml', 'aria-label': 'Choose subscriptions file' } });
     file.addEventListener('change', () => { const selected = file.files?.[0]; if (selected) void selected.text().then(text => { if (!this.closed && this.page === 'transfer') area.value = text; }).catch(error => new Notice(String(error))); });
     new Setting(this.contentEl).addButton(button => button.setButtonText('Import').setCta().setDisabled(!this.service.getSnapshot().writable).onClick(() => {
       const contents = area.value;

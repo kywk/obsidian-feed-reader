@@ -1,8 +1,9 @@
+import { XMLBuilder, XMLParser, XMLValidator } from 'fast-xml-parser';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import type { FeedFolder, FeedSource, SubscriptionDocument } from '../domain/models';
 
-export type SubscriptionFormat = 'yaml' | 'toml';
+export type SubscriptionFormat = 'yaml' | 'toml' | 'opml';
 
 export class SubscriptionDocumentError extends Error {
   constructor(message: string, readonly details?: string) {
@@ -107,6 +108,7 @@ export function validateSubscriptionDocument(value: unknown): SubscriptionDocume
 
 export function parseSubscriptions(text: string, format: SubscriptionFormat): SubscriptionDocument {
   try {
+    if (format === 'opml') return parseOpml(text);
     if (format === 'toml') return validateSubscriptionDocument(parseToml(text));
     const document = parseDocument(text, { uniqueKeys: true });
     if (document.errors.length > 0) {
@@ -125,6 +127,7 @@ export function parseSubscriptions(text: string, format: SubscriptionFormat): Su
 
 export function serializeSubscriptions(document: SubscriptionDocument, format: SubscriptionFormat): string {
   const valid = validateSubscriptionDocument(document);
+  if (format === 'opml') return serializeOpml(valid);
   return format === 'toml'
     ? stringifyToml(valid as unknown as Record<string, unknown>)
     : stringifyYaml(valid, { lineWidth: 0 });
@@ -132,4 +135,71 @@ export function serializeSubscriptions(document: SubscriptionDocument, format: S
 
 export function emptySubscriptionDocument(): SubscriptionDocument {
   return { version: 1, folders: [], feeds: [] };
+}
+
+/** OPML is an exchange format; vault persistence remains YAML. */
+function parseOpml(text: string): SubscriptionDocument {
+  if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new SubscriptionDocumentError('OPML must not contain DTD or entity declarations');
+  const validation = XMLValidator.validate(text);
+  if (validation !== true) throw new SubscriptionDocumentError(`Invalid OPML XML: ${validation.err.msg}`);
+  const parsed = new XMLParser({ ignoreAttributes: false, parseAttributeValue: false, parseTagValue: false,
+    isArray: name => name === 'outline' }).parse(text);
+  const root = object(parsed.opml, 'OPML root');
+  if (!['1.0', '1.1', '2.0'].includes(String(root['@_version']))) throw new SubscriptionDocumentError('Unsupported OPML version');
+  if (!Object.hasOwn(root, 'body')) throw new SubscriptionDocumentError('OPML body is required');
+  const body = root.body === '' ? {} : object(root.body, 'OPML body');
+  const folders = new Map<string, FeedFolder>();
+  const paths = new Map<string, string>();
+  const feeds = new Map<string, FeedSource>();
+  const label = (node: Record<string, unknown>): string => {
+    for (const key of ['@_title', '@_text']) {
+      const value = node[key];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return '';
+  };
+  const visit = (value: unknown, path: string[], depth: number): void => {
+    if (depth > 100) throw new SubscriptionDocumentError('OPML nesting exceeds 100 levels');
+    if (value === undefined) return;
+    if (!Array.isArray(value)) throw new SubscriptionDocumentError('Invalid OPML outlines');
+    for (const entry of value) {
+      const node = object(entry, 'OPML outline');
+      const title = label(node);
+      if (Object.hasOwn(node, '@_xmlUrl')) {
+        const url = normalizeFeedUrl(string(node['@_xmlUrl'], 'OPML xmlUrl'));
+        const folder = folders.get(path.join(' / '));
+        const references = folder ? [folder.id] : [];
+        const existing = feeds.get(url);
+        if (existing) existing.folderIds = [...new Set([...existing.folderIds, ...references])];
+        else feeds.set(url, { id: sourceIdFromUrl(url), url, title: title || url, folderIds: references });
+        visit(node.outline, path, depth + 1);
+      } else {
+        if (String(node['@_type'] ?? '').toLowerCase() === 'rss') throw new SubscriptionDocumentError('RSS outline is missing xmlUrl');
+        if (node['@_type'] && node['@_type'] !== 'rss') throw new SubscriptionDocumentError(`Unsupported OPML outline type: ${node['@_type']}`);
+        if (!title) throw new SubscriptionDocumentError('OPML folder must have text or title');
+        const next = [...path, title], name = next.join(' / '), identity = JSON.stringify(next);
+        if (paths.has(name) && paths.get(name) !== identity) throw new SubscriptionDocumentError(`Ambiguous flattened OPML folder: ${name}`);
+        paths.set(name, identity);
+        if (!folders.has(name)) folders.set(name, { id: sourceIdFromUrl(`https://opml.invalid/${encodeURIComponent(name)}`).replace('feed-', 'folder-'), title: name });
+        visit(node.outline, next, depth + 1);
+      }
+    }
+  };
+  visit(body.outline, [], 0);
+  return validateSubscriptionDocument({ version: 1, folders: [...folders.values()], feeds: [...feeds.values()] });
+}
+
+function serializeOpml(document: SubscriptionDocument): string {
+  // OPML cannot distinguish same-named flat folders on import.
+  if (new Set(document.folders.map(folder => folder.title)).size !== document.folders.length) {
+    throw new SubscriptionDocumentError('Rename duplicate folder titles before exporting OPML');
+  }
+  const outline = (feed: FeedSource): Record<string, unknown> => ({ '@_text': feed.title, '@_title': feed.title, '@_type': 'rss', '@_xmlUrl': feed.url });
+  const outlines = [
+    ...document.folders.map(folder => ({ '@_text': folder.title, outline: document.feeds.filter(feed => feed.folderIds.includes(folder.id)).map(outline) })),
+    ...document.feeds.filter(feed => feed.folderIds.length === 0).map(outline),
+  ];
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLBuilder({ ignoreAttributes: false, format: true }).build({
+    opml: { '@_version': '2.0', head: { title: 'Vault Feed Reader subscriptions' }, body: { outline: outlines } },
+  });
 }
