@@ -2,6 +2,12 @@
 
 更新日期：2026-09-22。此檔補充早期簡短 commit 的需求、成果與驗證，不改寫 Git 歷史。後續提交遵循 [Commit 規範](agents/commits.md)。
 
+## 筆記全文與本地 Agent 摘要 — feature branch
+
+分支 `codex/article-fulltext-ai-summary`，本次工作已按保存、訂閱 UI、文章增補與文件分批提交，尚未發布。新增僅作用目前 Markdown 筆記的全文與摘要命令、多組原文辨識、本機 CLI 設定、取消與修改衝突保護。
+
+文件入口：[規格](history/2026-09-22-article-enrichment/spec.md)、[分階段計畫](history/2026-09-22-article-enrichment/implementation-plan.md)、[multi-agent 分工](history/2026-09-22-article-enrichment/multi-agent-tasks.md)、[技術查證](history/2026-09-22-article-enrichment/research.md)、[本次驗證](history/2026-09-22-article-enrichment/validation.md)。不將 mock／程序測試當成真實 CLI 模型或 Obsidian 實機通過。
+
 ## c8f49de — MVP 基準與選型分析
 
 建立本專案初始 Git 基準：RSS／Atom 訂閱、閱讀列表與正文、閱讀狀態、精選 Markdown 保存、來源管理與模板設定。訂閱以 YAML 為權威，文章內容使用本機 IndexedDB，保存筆記保留人工修改。

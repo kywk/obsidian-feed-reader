@@ -8,6 +8,8 @@ A desktop RSS and Atom reader for Obsidian, built for browsing many feeds and sa
 
 The MVP and OPML import/export are implemented. The recorded OPML validation passed the build and 90 regular tests, with one opt-in scale test skipped. OPML has not yet been tested in Obsidian or against real exports from other readers. See [OPML validation](docs/opml-validation.md) and the earlier [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md) for the scope and limitations of previous checks.
 
+This feature branch adds note full-text retrieval and local CLI summaries. See [feature validation](docs/history/2026-09-22-article-enrichment/validation.md); native Obsidian and real model interoperability are not yet verified.
+
 - Desktop Obsidian only; declared minimum version: **1.8.7**. This does not mean every desktop version has been tested.
 - No Feedly or other service account is required. Only public HTTP(S) feeds are supported.
 - Submitted to the Community Plugins directory. Versions 0.1.0 and 0.1.1 failed automated review; 0.1.2 also removes the redundant plugin-name settings heading. Approval is pending.
@@ -77,15 +79,36 @@ Back up your vault subscriptions, state, and notes. IndexedDB is a disposable ca
 
 Opening the reader triggers a refresh. While any reader tab exists, feeds refresh every 30 minutes, even when you switch to a note. Closing the last reader stops the schedule. After sleep, an overdue schedule triggers one catch-up refresh. Manual refresh is available; a failed source retains its cached articles and displays an error.
 
-Only feed-provided content or summaries are used. The plugin does not scrape original article pages, sign in to Feedly or other services, or download attachments. Rendering and saving share DOMPurify sanitization and HTTP(S) URL rules. Remote images remain URLs: saved text is available offline, but images may not be.
+The reader uses feed-provided content or summaries. Separate note commands can retrieve public article pages (see below); the plugin does not sign in to article sites or download attachments. Rendering, saving, and full-text extraction share DOMPurify sanitization and HTTP(S) URL rules. Remote images remain URLs: saved text is available offline, but images may not be.
+
+## Full text and AI summaries in notes
+
+Open a saved feed or Web Clipper Markdown note, then use the Obsidian command palette (`Cmd+P` on macOS; your configured shortcut elsewhere):
+
+- **抓取原文全文**: retrieve the public article and replace its recognized original-text section, or append one.
+- **產生 AI 摘要**: summarize recognized full text. If none is recognized, fetch in the background and write only the summary; the fetched full text is not added.
+- **抓取全文並摘要**: fetch, then summarize; a failure leaves the note unchanged.
+
+These commands are unavailable in the reader. They do not change feed caching, reading state, or the existing Save behavior.
+
+In **文章全文與 AI 摘要**, configure ordered source URL fields (defaults: `feed_reader_url`, `source`, `url`), original section headings, or a property/value condition that treats the entire body as full text. Web Clipper defaults to `source` and an unmarked body; add a condition matching your template, to summarize the existing body. Merely having a URL is not proof that a note contains full text. The first matching rule wins; ambiguous sections or URLs require a choice. ATX headings (`## Article`) are recognized outside fenced code blocks; a section ends at the next heading of equal or higher level.
+
+Managed sections use HTML comment markers. Recognized original sections, including manual edits inside them, are replaced; content outside them and Properties are preserved. Whole-body rules select summary input only: they never authorize replacing the entire original note. New original sections are appended under **原文** by default. Summaries go in **AI 摘要** before the article and are replaced on rerun. The default prompt requests a Traditional Chinese overview and 3–5 points; customize it in settings. Recognition identifies a text region, not a guarantee that a website supplied its entire article.
+
+In **本機 Agent**, detection lists Codex, Claude Code, OpenCode, and pi. Choose a default, override its executable and complete argument list, or add a custom CLI. Apply before refreshing detection. Keep the noninteractive/output-format flags in built-in presets. A custom CLI receives a prompt and article JSON on stdin and must return the requested JSON object on stdout: `{"summary":"Markdown summary","tags":["topic"]}`. Detection checks executable availability; **測試** makes a real model request with test text, never a note, and may consume model quota. Install and log into the CLI yourself. Presets retain its model/login defaults; CLI configuration can use cloud models.
+
+Agent choices, paths, arguments, and detection results use vault-specific localStorage and do not sync through plugin `data.json`. Article rules and prompts use normal plugin settings. macOS/Linux executable discovery includes common installation directories; Windows `.cmd` shims are not supported directly—use a native executable or compatible wrapper. Framework protocol tests are mocked; actual installed versions and native Obsidian behavior still need validation. See [validation](docs/history/2026-09-22-article-enrichment/validation.md).
+
+Jobs run in the background with **取消** in their progress notice; one job per note. Switching notes does not change the destination. If the note changed, a preview lets you copy the result, cancel, or explicitly replace the current note. Open editor changes use Obsidian's undo and autosave; closed notes use an atomic content check. Fetching times out after 30 seconds; CLI summarization after 120 seconds. Public HTML only: no login cookies, browser JavaScript execution, or paywall bypass. The 5 MiB response limit applies after download, and cancellation discards late network results. Redirect-relative links use the requested URL because Obsidian's request API does not expose a final URL.
 
 ## Privacy and network access
 
 - Refreshing sends requests directly to the public RSS/Atom URLs you subscribe to, including destinations reached through redirects, to retrieve articles.
 - Displaying article images can contact the image hosts specified by the feed, including third-party hosts. Saved notes retain these remote URLs and may load them when viewed in Obsidian. Those hosts receive ordinary network requests, including your IP address.
 - Opening the original article launches its URL in your external browser.
+- Note full-text commands request the source article URL. Summary commands send the selected text to a local CLI, which may contact its configured model provider. Temporary working directories are created outside the vault and removed after execution. CLI tools and global extensions/MCP configuration remain trusted software: a temporary directory is not an OS security sandbox. Built-in presets restrict tools where supported; custom arguments can change those restrictions.
 - The plugin has no analytics, telemetry, advertisements, paid features, or developer-operated backend. It does not upload your notes or reading state to a plugin service.
-- Persistent subscriptions, state, and saved notes stay in the vault; plugin settings use Obsidian's plugin data storage. Article cache uses local IndexedDB. The plugin does not directly read or write arbitrary files outside the vault. Importing a file uses a user-selected file; exporting a download uses the browser download mechanism.
+- Persistent subscriptions, state, and saved notes stay in the vault; shared plugin settings use Obsidian's plugin data storage. Article cache uses local IndexedDB; CLI settings use localStorage. Agent detection checks executable paths outside the vault. Importing a file uses a user-selected file; exporting a download uses the browser download mechanism.
 
 ## Sidebar, themes, and large subscription lists
 
@@ -128,7 +151,7 @@ Available variables: `{{title}}`, `{{feed}}`, `{{link}}`, `{{published}}`, `{{cr
 
 `published` and `created` default to ISO timestamps. Supported date formats are `YYYY-MM-DD`, `YYYY-MM-DD HH:mm`, `YYYY-MM-DD HH:mm:ss`, and `YYYY-MM-DDTHH:mm:ss`, for example `{{created:YYYY-MM-DD}}`; all use UTC. Missing publication dates yield an empty `published`. The `date` fallback order is publication time, first fetch time, then save time.
 
-The settings page previews the filename and Markdown source. Unknown variables, invalid YAML, and reserved properties show errors and disable **Apply**. **Apply templates** saves changes; **Load defaults** only resets the draft and still requires Apply. `title` and `feed_reader_*` are managed by the plugin and cannot be overridden.
+The settings page previews the filename and Markdown source. Unknown variables, invalid YAML, and reserved properties show errors and disable **Apply**. **Apply templates** saves changes; **Load defaults** only resets the draft and still requires Apply. `title`, `date_created`, `date_updated`, and `feed_reader_*` are managed by the plugin and cannot be overridden.
 
 Templates affect only new notes. Existing saved notes open unchanged; editing templates does not rewrite historical notes or personal annotations. Users without custom templates keep the default format.
 
@@ -152,3 +175,11 @@ Report problems through [GitHub Issues](https://github.com/kywk/obsidian-feed-re
 ## License
 
 [MIT](LICENSE), copyright 2026 kywk. Third-party dependencies retain their own licenses; see [Third-party notices](THIRD_PARTY_NOTICES.md). The build includes these notices in `main.js` so they accompany installed copies.
+
+## Source dialog and saved-note dates
+
+**Manage sources → Add source** opens a modal while keeping the list in place. Title is optional: when only an RSS/Atom URL is entered, Add attempts to retrieve the feed title. If retrieval fails or no title is available, the draft stays open so you can enter a title and retry. A supplied title is preserved. Editing existing sources stays in the management view.
+
+New saved notes contain `date_created` and `date_updated` (UTC ISO timestamps), initially both set to the save time. Full-text/summary updates preserve creation time and advance `date_updated`. The old `feed_reader_saved_at` and `feed_reader_first_fetched_at` fields are no longer emitted. Older saved notes remain indexed and deduplicated; an explicit full-text/summary update migrates their date fields. No background bulk rewrite or manual-edit timestamp watcher is installed. Repeated Save still opens the existing note without rewriting it.
+
+AI summary commands also generate 3–5 topic tags in the same request. Tags are merged into frontmatter `tags` as a YAML list; existing tags are retained and duplicates are matched case-insensitively. A note without Properties gets frontmatter added. Summaries and tags are saved together; malformed model output leaves the note unchanged. Fetch-only commands do not generate tags. Custom content prompts still apply, but the plugin requires JSON with `summary` and `tags` as its response format.

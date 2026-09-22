@@ -10,6 +10,8 @@ MVP 與 OPML 匯入／匯出已實作；OPML 完整工作區 build 與 90 個一
 
 開發前閱讀 [AGENTS.md](AGENTS.md)；提交與驗收規範由該檔按需導引。歷次成果與提交脈絡見 [進展索引](docs/progress.md)。
 
+本功能分支新增筆記全文擷取與本機 CLI 摘要；驗證範圍見[本次紀錄](docs/history/2026-09-22-article-enrichment/validation.md)，尚未驗證原生 Obsidian 與真實模型互通。
+
 ## 開發與本機安裝
 
 使用 Node.js 22：
@@ -72,7 +74,31 @@ YAML 是唯一訂閱權威來源。UI 修改回寫 YAML；支援 YAML／TOML／O
 
 開啟 reader 時更新；只要任一 reader 分頁仍存在，每 30 分鐘更新一次，切到筆記也會繼續。最後一個 reader 關閉後停止排程，休眠過期只補一輪。可手動更新；單一來源失敗保留其既有文章並顯示錯誤。
 
-僅使用 feed 自帶正文／摘要，不擷取原文網頁、不登入 Feedly 或其他帳號、不下載附件。渲染與保存共用 DOMPurify／HTTP(S) URL 規則；相對連結以來源 URL 解析。圖片保留遠端 URL，離線可讀已保存文字，圖片不保證可用。
+reader 使用 feed 自帶正文／摘要；獨立筆記命令可擷取公開原文網頁，不登入文章網站或下載附件。渲染、保存與全文擷取共用 DOMPurify／HTTP(S) URL 規則。圖片保留遠端 URL，離線可讀已保存文字，圖片不保證可用。
+
+## 筆記全文與 AI 摘要
+
+開啟 Feed 保存或 Web Clipper 產生的 Markdown 筆記，在 Obsidian 命令面板（macOS 預設 `Cmd+P`）執行：
+
+- **抓取原文全文**：取代已辨識的原文區塊；沒有則附加於文末。
+- **產生 AI 摘要**：摘要全文；未辨識全文時，背景擷取後只寫入摘要，不附加全文。
+- **抓取全文並摘要**：先抓取再摘要；任一步驟失敗保留原筆記。
+
+命令不在 reader 下執行，不改變閱讀狀態、快取或原有 Save 行為。
+
+設定的 **文章全文與 AI 摘要** 可調整網址欄位（預設 `feed_reader_url`、`source`、`url`）、多組標題規則及順序，或用 Properties 欄位／值將整份正文視為全文。Web Clipper 預設 `source` 且正文無標記，請依模板設定全文條件；僅有網址不代表已含全文。第一個符合規則優先，多個區塊或網址會提示選擇。支援 fenced code 之外的 `## 原文` 類型標題，到下一個同級／更高級標題為止。
+
+新區塊加入隱藏 HTML 註解標記。重新抓取只取代已辨識全文區塊內的內容，保留其餘原文、未知區塊與 Properties。「整份正文」規則只選擇摘要輸入，不授權取代整份筆記；沒有全文區塊就附加於文末。附加標題預設 **原文**；摘要置於文章前的 **AI 摘要**，重跑取代。預設繁體中文概述＋3–5 重點，提示詞可設定。全文辨識只決定文字範圍，無法保證網站回傳的是完整文章。
+
+**本機 Agent** 提供 Codex、Claude Code、OpenCode、pi 偵測、預設選擇、執行檔與完整參數編輯，以及自訂 CLI。修改後先套用，再重新偵測；內建的非互動／輸出格式參數應保留。自訂 CLI 從 stdin 接收提示與文章 JSON，stdout 依要求輸出 `{"summary":"Markdown 摘要","tags":["主題"]}` JSON。需自行安裝並登入 CLI；模型沿用其預設設定。**測試**會用不含筆記的測試文字呼叫模型，可能使用額度。偵測成功只代表找到可執行檔。
+
+Agent 路徑、參數、預設與偵測結果存於此裝置的 vault 專用 localStorage；提示詞與規則存於插件設定。macOS/Linux 偵測包含常見安裝路徑；Windows `.cmd` shim 不能直接執行，需原生執行檔或相容 wrapper。四框架目前驗證為 mock 協定測試，真實版本與 Obsidian 原生操作仍待驗證，詳見[本次驗證](docs/history/2026-09-22-article-enrichment/validation.md)。
+
+工作背景執行，通知提供 **取消**；同篇只允許一項工作，切換筆記仍寫回原筆記。等待期間若有變更，顯示完整結果供複製、取消或明確取代。已開筆記透過編輯器更新，沿用 undo／Obsidian 自動儲存；已關筆記以原子內容比對寫入。
+
+全文只支援公開 HTTP(S) HTML，不使用登入 Cookie、不執行網頁 JavaScript、不繞過付費牆。擷取逾時 30 秒、CLI 120 秒；5 MiB 限制作用於下載後解析，取消會丟棄晚到網路結果。Obsidian request API 不提供最終轉址 URL，轉址頁面相對連結仍以請求網址解析。
+
+摘要會把選定文字傳給本機 CLI，CLI 可依設定連到雲端模型。插件在 vault 外建立並清除暫存工作目錄，直接啟動程式而不執行 shell；暫存目錄不等於作業系統沙箱。CLI 與其全域擴充／MCP 仍需可信，使用者自訂參數可改變工具限制。
 
 ## 規格與驗證
 
@@ -125,7 +151,7 @@ source: "{{feed}}"
 
 `published`、`created` 預設為 ISO 時間，日期格式可用 `YYYY-MM-DD`、`YYYY-MM-DD HH:mm`、`YYYY-MM-DD HH:mm:ss`、`YYYY-MM-DDTHH:mm:ss`，例如 `{{created:YYYY-MM-DD}}`，均使用 UTC。缺少發佈時間時 `published` 為空；`date` 則依發佈時間、首次抓取、保存時間順序選擇日期。
 
-設定頁即時預覽範例文章的檔名與 Markdown 原始碼；未知變數、錯誤 YAML 或保留欄位會顯示錯誤並停用 Apply。按 **Apply templates** 才保存設定；**Load defaults** 只重設草稿，仍須 Apply。`title` 與 `feed_reader_*` 由系統維護，不能由自訂 Properties 覆蓋。
+設定頁即時預覽範例文章的檔名與 Markdown 原始碼；未知變數、錯誤 YAML 或保留欄位會顯示錯誤並停用 Apply。按 **Apply templates** 才保存設定；**Load defaults** 只重設草稿，仍須 Apply。`title`、`date_created`、`date_updated` 與 `feed_reader_*` 由系統維護，不能由自訂 Properties 覆蓋。
 
 模板只影響新建筆記。已保存的文章仍開啟原筆記，不重新套版、不覆寫心得；修改模板也不會批次改寫歷史筆記。原有使用者未設定模板時沿用預設格式。
 
@@ -158,3 +184,11 @@ source: "{{feed}}"
 ## 授權
 
 本專案採用 [MIT 授權](LICENSE)，著作權為 2026 kywk。第三方套件保留各自授權，詳見[第三方授權聲明](THIRD_PARTY_NOTICES.md)。建置會將授權聲明嵌入 `main.js`，隨安裝檔一起散布。
+
+## 新增來源對話框與筆記日期
+
+**Manage sources → Add source** 會開啟彈出對話框，保留底下來源清單。標題可空白：僅輸入 RSS／Atom URL 後按 Add，會嘗試讀取 feed 標題；失敗或無標題時保留草稿，讓你填入標題再送出。手填標題優先，不會被自動結果覆蓋。既有來源編輯仍在管理頁。
+
+新保存筆記使用 `date_created`、`date_updated`（UTC ISO 時間），初次皆為保存時間。全文／摘要更新保留建立時間並更新 `date_updated`，不再輸出 `feed_reader_saved_at` 與 `feed_reader_first_fetched_at`。舊筆記仍能去重／開啟，明確執行全文或摘要更新時才轉換日期欄位；不整批改寫歷史筆記，也不監聽人工編輯修改時間。重複 Save 仍只開啟筆記。
+
+AI 摘要命令也會在同一次請求產生 3–5 個主題標籤，合併進 frontmatter 的 `tags` YAML 清單；保留原有標籤並忽略大小寫去重。沒有 Properties 時新增 frontmatter。摘要與 tags 一起寫入，AI 格式無效時整次不寫入。單獨擷取全文不產生標籤。自訂提示詞仍控制摘要內容，回傳格式由插件要求為含 `summary`／`tags` 的 JSON。

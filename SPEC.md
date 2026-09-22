@@ -4,7 +4,7 @@
 
 ## S1 平台與範圍
 
-Obsidian 桌面插件，獨立 RSS／Atom reader。只抓可直接透過 HTTP(S) URL 取得的 feed；不處理帳號登入、Cookie、特殊驗證、Feedly 帳號、全文網頁擷取、附件下載、tags、巢狀資料夾、全文搜尋。vault 如何同步或迁移不在範圍內。插件需正確讀寫自身資料並處理本機檔案變更，不建跨裝置衝突合併系統。
+Obsidian 桌面插件，獨立 RSS／Atom reader。只抓可直接透過 HTTP(S) URL 取得的 feed；不處理帳號登入、Cookie、特殊驗證、Feedly 帳號、reader 內全文網頁擷取、附件下載、tags、巢狀資料夾、全文搜尋。vault 如何同步或迁移不在範圍內。插件需正確讀寫自身資料並處理本機檔案變更，不建跨裝置衝突合併系統。
 
 ## S2 訂閱
 
@@ -49,7 +49,7 @@ ribbon RSS 按鈕同時開左側來源與主區域 reader；重複開啟復用�
 
 ## S6 保存与內容安全
 
-保存 RSS 正文或摘要為 Markdown，不額外抓網頁。無內容仍存標題、連結等 metadata 並明示來源沒有內容。圖片保留遠端 URL；可離線讀文字，圖片不保證。內容渲染及轉換前使用可靠 sanitization，禁止 script、iframe、事件 handler 與危險 URL scheme；相對圖片與連結按來源 URL 解析，只開安全 HTTP(S) 原文。
+reader 的 Save 保存 RSS 正文或摘要為 Markdown，不額外抓網頁；獨立筆記命令見 S8。無內容仍存標題、連結等 metadata 並明示來源沒有內容。圖片保留遠端 URL；可離線讀文字，圖片不保證。內容渲染及轉換前使用可靠 sanitization，禁止 script、iframe、事件 handler 與危險 URL scheme；相對圖片與連結按來源 URL 解析，只開安全 HTTP(S) 原文。
 
 檔名為日期＋安全化標題，重名加短識別碼；不覆蓋其他筆記。frontmatter 至少含 `feed_reader_id`（feedId＋articleId 的穩定組合）、`feed_reader_source_id`、來源名稱、原文網址、發佈時間（若有）、保存時間。透過 serializer 處理 YAML escaping。
 
@@ -68,9 +68,41 @@ ribbon RSS 按鈕同時開左側來源與主區域 reader；重複開啟復用�
 
 ## S6 補充：可設定筆記模板（2026-09-22）
 
-全域設定提供檔名模板、Markdown 內文模板與自訂 Properties YAML，以及範例資料即時預覽。套用前驗證未知／破損變數、格式及 YAML。Properties 先解析結構再代入值，最後統一 serialize；保留 title 與 feed_reader_*，不得破壞筆記識別。日期格式採 UTC，date 提供日期 fallback。模板只作用於新筆記，既有筆記去重、人工編輯保護及 rename/delete 追蹤保持原有語意。第一版不新增作者／摘要欄位解析、不執行腳本、不提供每来源個別模板。
+全域設定提供檔名模板、Markdown 內文模板與自訂 Properties YAML，以及範例資料即時預覽。套用前驗證未知／破損變數、格式及 YAML。Properties 先解析結構再代入值，最後統一 serialize；保留 title、date_created、date_updated 與 feed_reader_*，不得破壞筆記識別。日期格式採 UTC，date 提供日期 fallback。模板只作用於新筆記，既有筆記去重、人工編輯保護及 rename/delete 追蹤保持原有語意。第一版不新增作者／摘要欄位解析、不執行腳本、不提供每来源個別模板。
 
 
 ## OPML 交換格式（2026-09-22）
 
 OPML 匯入／匯出沿用訂閱管理頁及 merge／replace 流程，不改變 YAML 權威來源。接受版本 1.0／1.1／2.0，匯出 2.0。巢狀 outline 以完整分類路徑攤平為單層名稱；保留父分類、空分類與同來源多分類關聯。匯入按 URL 合併，同名分類對應現有分類；merge 保留既有名稱及關聯，replace 使用匯入內容，兩者都沿用已知 URL 的來源 ID。分類歧義與無效內容整次拒絕，不部分套用。OPML 不交換閱讀狀態、快取、筆記或本專案內部 ID。詳細操作與限制見 README。
+
+## S8 筆記全文與本地 Agent 摘要（2026-09-22）
+
+已確認契約：[完整規格](docs/history/2026-09-22-article-enrichment/spec.md)。本節擴充 S1/S6，不改 reader 的 Save、閱讀狀態或快取。
+
+- Obsidian 命令面板提供「抓取原文全文」「產生 AI 摘要」「抓取全文並摘要」，僅對目前 Markdown 筆記執行。
+- 公開 HTTP(S) HTML 經 Readability 與共用清理規則轉 Markdown；不登入、不執行 JS、不用 proxy。不以取得 HTML 或抽出文字保證網站提供完整文章。
+- 網址欄位可設定，預設 feed_reader_url/source/url；多個不同有效網址選擇，缺少則提示補入。
+- 原文規則支援多組有序標題及 Properties 條件整正文。第一匹配優先，重複區塊選擇；新內容使用管理標記。既有原文範圍取代（包括其人工編輯），否則附加；範圍外與 Properties 保留。
+- 摘要排除 Properties 與已有摘要，全文不明時自動背景擷取，單獨摘要命令只寫摘要，不寫全文。預設繁中概述＋3–5 重點，可自訂提示詞；AI 摘要區塊放在文章前並於重跑取代。組合命令任一步失敗不寫部分結果。
+- Codex/Claude Code/OpenCode/pi 內建與自訂 CLI；提供偵測、預設、路徑、完整參數、測試。模型與登入沿用 CLI；插件不提供安裝、登入或模型服務。設定測試使用非筆記測試文字，仍可能消耗模型額度。
+- 本機 CLI 設定使用 vault 專用 localStorage；原文規則／提示詞使用插件 data.json。CLI 以暫存 cwd、stdin、shell:false 執行，插件掌管筆記更新；不是全面 OS 沙箱，仍信任全域 CLI/MCP 設定及自訂參數。
+- 同篇單工作、背景取消、固定起始筆記；卸載取消。筆記有變動時先預覽供複製／取消／明確取代。開啟筆記經 editor 更新並由 Obsidian 自動保存，關閉筆記用 vault.process 原子比對。
+- 擷取 30 秒／下載後 5 MiB 解析上限，CLI 120 秒／2 MiB 輸出上限。取消保證不遲到寫入，不保證底層 requestUrl 終止。Windows .cmd shim 需另用原生執行檔或 wrapper。
+
+驗證與已知限制見 [validation](docs/history/2026-09-22-article-enrichment/validation.md)，未執行實機或模型互通不視為已通過。
+
+## S2/S6 補充：新增來源對話框與日期 Properties（2026-09-22）
+
+新增來源改用 Modal，保留管理列表；Title 可省略並嘗試從 RSS/Atom 的 feed-level title 取得。手填 title 優先，擷取失敗保留草稿並要求補入標題；取消／關閉後不得因晚到網路結果新增訂閱。送出不可重複，成功沿用 SubscriptionService 身分與分類規則。
+
+新保存筆記的 date_created/date_updated 初始為保存時 UTC ISO 日期。移除新輸出的 feed_reader_saved_at/feed_reader_first_fetched_at；索引仍支援舊欄位，firstFetchedAt 缺少時以建立時間作顯示 fallback，不改來源已讀狀態。全文／摘要寫入時更新 date_updated，保留 date_created（舊筆記由 feed_reader_saved_at 遷移），並移除舊兩欄。只作用具 feed_reader_id 的筆記，不改 Web Clipper 自訂日期；不批次遷移／不監聽人工編輯。這些日期列為保留 Properties，重複 Save 仍不改筆記。
+
+## S8 補充：摘要取文與原內容保留（2026-09-22）
+
+「產生 AI 摘要」無可辨識全文時，自動背景抓取原文作為 AI 輸入，只寫入摘要，不附加全文、不再詢問本次使用正文。「抓取原文全文」及「抓取全文並摘要」仍寫入全文。
+
+新摘要放在 Properties 後、原內容前；新全文附加於原內容後。已有管理標記或設定標題所辨識的對應區塊才取代，未知區塊、原始剪藏正文與個人筆記保留。整正文 Properties 規則僅代表摘要輸入，不作為整份筆記覆寫範圍。既有標題區塊仍以至下一同級／高級標題為邊界，區塊內子標題視為該區內容；隱藏管理標記則提供精確邊界。
+
+## S8 補充：AI 主題標籤（2026-09-22）
+
+單獨摘要與全文加摘要命令於同次 CLI 請求產生摘要和 3–5 個主題 tags，以 JSON summary/tags 回傳。驗證後摘要及標籤原子套用：tags 與既有文字／文字清單合併、忽略大小寫去重，不刪既有標籤；無 Properties 則建立。保留其他 Properties 與非目標正文。格式錯誤／既有 tags 不是文字或文字清單時保留原筆記並提示，不部分寫入。單獨擷取全文不生成 tags；摘要為背景擷取時仍不寫全文。
