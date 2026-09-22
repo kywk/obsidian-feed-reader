@@ -24,7 +24,7 @@ npm run test:scale
 npm run dev
 ```
 
-將 `main.js`、`manifest.json`、`styles.css` 複製到測試 vault 的 `.obsidian/plugins/vault-feed-reader/`，在 Settings → Community plugins 啟用 **Vault Feed Reader**。更新檔案後停用再啟用插件。已提交社群目錄；0.1.0 未通過自動審查，0.1.1 修正阻擋項目，仍待審查通過。可由 [GitHub Releases](https://github.com/kywk/obsidian-feed-reader/releases) 手動安裝；驗證範圍見[審查修正記錄](docs/community-review-validation.md)。
+將 `main.js`、`manifest.json`、`styles.css` 複製到測試 vault 的 `.obsidian/plugins/vault-feed-reader/`，在 Settings → Community plugins 啟用 **Vault Feed Reader**。更新檔案後停用再啟用插件。已提交社群目錄；0.1.0 與 0.1.1 未通過自動審查，0.1.2 進一步移除重複外掛名稱的設定標題，仍待審查通過。可由 [GitHub Releases](https://github.com/kywk/obsidian-feed-reader/releases) 手動安裝；驗證範圍見[審查修正記錄](docs/community-review-validation.md)。
 
 ## 閱讀流程
 

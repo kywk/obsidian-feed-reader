@@ -13,7 +13,7 @@ export function isVaultRelative(path: string): boolean {
 export class FeedReaderSettingTab extends PluginSettingTab {
   constructor(app: App, private readonly plugin: FeedReaderPlugin) { super(app, plugin); }
   display(): void {
-    this.containerEl.empty(); new Setting(this.containerEl).setName('Vault Feed Reader').setHeading();
+    this.containerEl.empty();
     let subscriptionsPath = this.plugin.settings.subscriptionsPath;
     new Setting(this.containerEl).setName('Subscriptions YAML').setDesc('Vault-relative YAML path. Apply validates the file before switching.')
       .addText(text => text.setValue(subscriptionsPath).onChange(value => { subscriptionsPath = value.trim(); }))

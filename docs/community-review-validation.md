@@ -29,3 +29,13 @@
 ## 未納入此次修正
 
 0.1.0 的非阻擋項目：artifact attestations、vault 檔案枚舉、popout window／timer API、型別與 assertion 警告、控制字元正規表示式、較新版 declarative settings API、XML API 棄用、setWarning 棄用及未使用符號。未宣稱這些均已修復；版本相容性與後續整理需另行驗證。
+
+## 0.1.1 審查與 0.1.2 修正
+
+使用者收到 0.1.1 審查失敗通知。2026-09-22 讀取結果時，頁面仍顯示 Pending／部分檢查進行中，但已列出新的阻擋錯誤：`Avoid including the plugin name in settings headings.`（src/settings.ts:16）。前次四類錯誤已不再列出，依賴檢查通過。
+
+0.1.2 移除設定頁頂端重複的外掛名稱標題，保留功能區段標題與設定操作。其餘非阻擋警告維持上述記錄。
+
+本機驗證：`npm run build` PASS；`npm test` PASS（91 passed、1 opt-in scale skipped）；`git diff --check` PASS。未執行原生 Obsidian 外觀與最低版本驗證。官方重新掃描結果仍待確認。
+
+手動驗證重點：開啟設定頁，確認頂端不再重複顯示 Vault Feed Reader；Subscriptions YAML、保存資料夾、Saved note templates 與 Preview 區段仍正常，修改模板與 Apply 操作不受影響。

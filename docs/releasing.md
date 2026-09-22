@@ -30,7 +30,7 @@ Git remote 已設定為 [kywk/obsidian-feed-reader](https://github.com/kywk/obsi
 5. 依自動審查提示修正問題、遞增版本並建立新 Release。選擇 Publish 並解決審查錯誤後，才可由 Obsidian 安裝。
 6. 後續版本同步維護版本資訊、雙語 README、授權聲明與驗證記錄，再建立新的 GitHub Release。
 
-0.1.0 Release 與官方提交已完成；該版本未通過自動審查。0.1.1 修正阻擋錯誤，詳見[審查修正記錄](community-review-validation.md)。
+0.1.0 Release 與官方提交已完成；該版本未通過自動審查。0.1.1 修正首輪阻擋錯誤；0.1.2 再移除重複的外掛名稱設定標題，詳見[審查修正記錄](community-review-validation.md)。
 
 ## 尚待發佈前完成
 
