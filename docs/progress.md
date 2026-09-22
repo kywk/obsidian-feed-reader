@@ -4,7 +4,7 @@
 
 ## 筆記全文與本地 Agent 摘要 — feature branch
 
-分支 `codex/article-fulltext-ai-summary`，本次工作已按保存、訂閱 UI、文章增補與文件分批提交，尚未發布。新增僅作用目前 Markdown 筆記的全文與摘要命令、多組原文辨識、本機 CLI 設定、取消與修改衝突保護。
+分支 `codex/article-fulltext-ai-summary`，本次工作已按保存、訂閱 UI、文章增補與文件分批提交，已合併 main 並發布 GitHub 0.2.0，Obsidian 新版審查 Pending。新增僅作用目前 Markdown 筆記的全文與摘要命令、多組原文辨識、本機 CLI 設定、取消與修改衝突保護。
 
 文件入口：[規格](history/2026-09-22-article-enrichment/spec.md)、[分階段計畫](history/2026-09-22-article-enrichment/implementation-plan.md)、[multi-agent 分工](history/2026-09-22-article-enrichment/multi-agent-tasks.md)、[技術查證](history/2026-09-22-article-enrichment/research.md)、[本次驗證](history/2026-09-22-article-enrichment/validation.md)。不將 mock／程序測試當成真實 CLI 模型或 Obsidian 實機通過。
 
@@ -39,3 +39,7 @@ OPML 三筆提交的共同驗證在分批前的完整工作區執行：build 通
 ## 0.1.1 社群審查修正
 
 0.1.0 上架掃描拒絕後，修正四類阻擋錯誤：停用移除分頁、設定頁標題、HTML 寫入與固定樣式。顯示及保存共用 DOMPurify 清理規則；新增安全回歸驗證。詳見[審查修正與驗證](community-review-validation.md)。
+
+## 0.2.0 發布
+
+發布 commit 33e6626；[GitHub Release](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.2.0) 已公開，三附件雜湊比對通過。官方已排入 0.2.0 自動掃描，狀態與限制见 [發布紀錄](history/2026-09-22-article-enrichment/release-0.2.0.md)。

@@ -47,3 +47,7 @@ Git remote 已設定為 [kywk/obsidian-feed-reader](https://github.com/kywk/obsi
 - [Submit your plugin](https://docs.obsidian.md/plugins/releasing/submit-plugin)
 - [Developer policies](https://docs.obsidian.md/community-directory/developer-policies)
 - [Submission requirements](https://docs.obsidian.md/community-directory/submission-requirements-for-plugins)
+
+## 0.2.0
+
+已合併 main 並公開 GitHub Release，版本與三個安裝附件一致；已通知 Obsidian 檢查新版，官方自動審查 Pending。詳見 [發布紀錄](history/2026-09-22-article-enrichment/release-0.2.0.md)。0.1.2 審查已完成，舊段落的 pending 描述為當時狀態。
