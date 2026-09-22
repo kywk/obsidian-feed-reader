@@ -8,15 +8,26 @@ vi.mock('obsidian', () => ({
     constructor(leaf: { contentEl: HTMLElement }) { this.contentEl = leaf.contentEl; }
   },
   WorkspaceLeaf: class {},
+  Notice: class {},
   setIcon: () => {},
   Setting: class {
     el: HTMLElement;
     constructor(parent: HTMLElement) { this.el = document.createElement('div'); parent.append(this.el); }
     setName(value: string) { const el = document.createElement('span'); el.textContent = value; this.el.append(el); return this; }
     setDesc(value: string) { return this.setName(value); }
+    addDropdown(configure: (dropdown: unknown) => void) {
+      const el = document.createElement('select'); this.el.append(el);
+      const component = {
+        addOptions(options: Record<string, string>) { for (const [value, label] of Object.entries(options)) { const option = document.createElement('option'); option.value = value; option.textContent = label; el.append(option); } return component; },
+        onChange(action: (value: string) => void) { el.addEventListener('change', () => action(el.value)); return component; },
+      };
+      configure(component); return this;
+    }
     addButton(configure: (button: unknown) => void) {
       const el = document.createElement('button'); this.el.append(el);
       const component = {
+        setCta() { return component; },
+        setWarning() { return component; },
         setButtonText(value: string) { el.textContent = value; return component; },
         setDisabled(value: boolean) { el.disabled = value; return component; },
         onClick(action: () => void) { el.addEventListener('click', action); return component; },
@@ -281,4 +292,37 @@ describe('Large source manager', () => {
     expect(root.querySelectorAll('.vfr-managed-source')).toHaveLength(50);
     await view.onClose();
   });
+});
+
+
+it('routes OPML export and import through the selected format and confirms replacement', async () => {
+  const root = document.createElement('div'); document.body.append(root);
+  const exported = '<opml version="2.0"><body/></opml>';
+  const service = {
+    getSnapshot: () => ({ document: { version: 1, feeds: [], folders: [] }, writable: true }),
+    subscribe: () => () => {}, export: vi.fn(() => exported), import: vi.fn(async () => {}),
+  };
+  const view = new ManageSubscriptionsView({ contentEl: root } as never, service as never, async () => {});
+  await view.onOpen();
+  const click = (label: string) => { const button = [...root.querySelectorAll('button')].find(b => b.textContent === label); expect(button).toBeDefined(); button!.click(); };
+  click('Import / export');
+  const format = root.querySelector('select')!; format.value = 'opml'; format.dispatchEvent(new Event('change'));
+  click('Generate export');
+  expect(service.export).toHaveBeenCalledWith('opml');
+  expect(root.querySelector('textarea')!.value).toBe(exported);
+  expect(root.querySelector('input[type=file]')!.getAttribute('accept')).toContain('.opml');
+  click('Import');
+  await vi.waitFor(() => expect(service.import).toHaveBeenCalledWith(exported, 'opml', 'merge'));
+  await vi.waitFor(() => expect(root.querySelector('h2')!.textContent).toBe('Manage RSS sources'));
+  click('Import / export');
+  const selectors = root.querySelectorAll('select');
+  selectors[0]!.value = 'opml'; selectors[0]!.dispatchEvent(new Event('change'));
+  selectors[1]!.value = 'replace'; selectors[1]!.dispatchEvent(new Event('change'));
+  root.querySelector('textarea')!.value = exported;
+  click('Import');
+  expect(service.import).toHaveBeenCalledTimes(1);
+  expect(root.textContent).toContain('Replace all subscriptions?');
+  click('Confirm');
+  await vi.waitFor(() => expect(service.import).toHaveBeenCalledWith(exported, 'opml', 'replace'));
+  await view.onClose();
 });
