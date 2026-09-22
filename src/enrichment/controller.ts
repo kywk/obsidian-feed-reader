@@ -1,3 +1,4 @@
+import { t, translateMessage } from '../i18n';
 import { MarkdownView, Modal, Notice, Setting, TFile, requestUrl, type App, type Plugin } from 'obsidian';
 import { DEFAULT_AGENT_CONFIGS, detectAgents, summarizeWithAgent, type AgentConfig, type DetectedAgent } from './agents';
 import { fetchArticle } from './fetch';
@@ -13,13 +14,13 @@ class ChoiceModal extends Modal {
   onOpen(): void {
     this.titleEl.setText(this.title);
     if (this.preview !== undefined) {
-      this.contentEl.createEl('p', { text: '筆記在執行期間已變更。以下是以啟動時內容產生的完整結果；套用會取代目前筆記，包含期間新增的編輯。可複製結果自行合併，或取消保留目前筆記。' });
-      const text = this.contentEl.createEl('textarea', { cls: 'vfr-enrichment-preview', attr: { 'aria-label': '完整結果', readonly: 'true' } });
+      this.contentEl.createEl('p', { text: t("The note changed during this operation. The complete result below was generated from the starting content. Applying it replaces the current note, including newer edits. Copy the result to merge manually, or cancel to keep the current note.") });
+      const text = this.contentEl.createEl('textarea', { cls: 'vfr-enrichment-preview', attr: { 'aria-label': t("Complete result"), readonly: 'true' } });
       text.value = this.preview;
       text.rows = 20;
     }
-    this.options.forEach((label, index) => new Setting(this.contentEl).setName(label).addButton(button => button.setButtonText('選擇').onClick(() => this.finish(index))));
-    new Setting(this.contentEl).addButton(button => button.setButtonText('取消').onClick(() => this.finish(null)));
+    this.options.forEach((label, index) => new Setting(this.contentEl).setName(label).addButton(button => button.setButtonText(t("Select")).onClick(() => this.finish(index))));
+    new Setting(this.contentEl).addButton(button => button.setButtonText(t("Cancel")).onClick(() => this.finish(null)));
   }
   private finish(value: number | null): void { this.settled = true; this.resolve(value); this.close(); }
   onClose(): void { if (!this.settled) this.resolve(null); this.contentEl.empty(); }
@@ -39,7 +40,7 @@ export class EnrichmentController {
     };
   }
   register(): void {
-    for (const [action, name] of [['fetch', '抓取原文全文'], ['summarize', '產生 AI 摘要'], ['both', '抓取全文並摘要']] as const) {
+    for (const [action, name] of [['fetch', t("Fetch original full text")], ['summarize', t("Generate AI summary")], ['both', t("Fetch full text and summarize")]] as const) {
       this.plugin.addCommand({ id: `article-${action}`, name, checkCallback: checking => {
         const view = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
         const file = view?.file;
@@ -78,13 +79,13 @@ export class EnrichmentController {
     });
   }
   private async run(file: TFile, action: EnrichmentAction): Promise<void> {
-    if (this.jobs.has(file)) { new Notice('此筆記已有工作進行中'); return; }
+    if (this.jobs.has(file)) { new Notice(t("This note already has an operation in progress")); return; }
     const abort = new AbortController();
     this.jobs.set(file, abort);
     const message = document.createDocumentFragment();
-    message.append(document.createTextNode('文章處理中… '));
+    message.append(document.createTextNode(t("Processing article… ")));
     const cancel = document.createElement('button');
-    cancel.textContent = '取消'; cancel.addEventListener('click', () => abort.abort(), { once: true }); message.append(cancel);
+    cancel.textContent = t("Cancel"); cancel.addEventListener('click', () => abort.abort(), { once: true }); message.append(cancel);
     const notice = new Notice(message, 0);
     const app = this.plugin.app;
     // Snapshot settings and selected agent for the whole operation.
@@ -96,7 +97,7 @@ export class EnrichmentController {
       const wrote = await enrichNote({
         read: async () => openEditors()[0]?.editor.getValue() ?? await app.vault.read(file),
         compareAndWrite: async (expected, next) => {
-          if (this.stopped || abort.signal.aborted) throw new Error('工作已取消');
+          if (this.stopped || abort.signal.aborted) throw new Error(t("Operation cancelled"));
           // The visible editor can be newer than disk. Update through its undo-aware API
           // synchronously, leaving Obsidian to save its own buffer.
           const views = openEditors();
@@ -111,7 +112,7 @@ export class EnrichmentController {
           }
           let written = false;
           await app.vault.process(file, current => {
-            if (this.stopped || abort.signal.aborted) throw new Error('工作已取消');
+            if (this.stopped || abort.signal.aborted) throw new Error(t("Operation cancelled"));
             if (current !== expected) return current;
             written = true; return next;
           });
@@ -123,17 +124,17 @@ export class EnrichmentController {
           return { status: response.status, text: response.text, headers: response.headers };
         }, { signal })).markdown,
         summarize: (article, prompt, signal) => {
-          if (!agent) throw new Error('請在設定選擇預設本地 Agent');
+          if (!agent) throw new Error(t("Choose a default local agent in settings"));
           return summarizeWithAgent(agent, { article, prompt, signal });
         },
         interaction: {
-          choose: (title, options, signal) => this.choose(title, options, signal),
-          review: async (result, signal) => (await this.choose('筆記內容已變更', ['以結果取代目前筆記'], signal, result)) === 0,
+          choose: (title, options, signal) => this.choose(translateMessage(title), options, signal),
+          review: async (result, signal) => (await this.choose(t("Note content changed"), [t("Replace current note with result")], signal, result)) === 0,
         },
       }, abort.signal);
-      if (!this.stopped) new Notice(wrote ? '文章筆記已更新' : '已取消，筆記未變更');
+      if (!this.stopped) new Notice(wrote ? t("Article note updated") : t("Cancelled; note unchanged"));
     } catch (error) {
-      if (!this.stopped) new Notice(abort.signal.aborted ? '工作已取消' : error instanceof Error ? error.message : String(error));
+      if (!this.stopped) new Notice(abort.signal.aborted ? t("Operation cancelled") : translateMessage(error instanceof Error ? error.message : String(error)));
     } finally { notice.hide(); this.jobs.delete(file); }
   }
   dispose(): void {

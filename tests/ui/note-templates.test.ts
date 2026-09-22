@@ -2,6 +2,8 @@ import { JSDOM } from 'jsdom';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('obsidian', () => ({
+  Plugin: class {},
+  Modal: class {},
   PluginSettingTab: class { containerEl = document.createElement('div'); },
   Notice: class {},
   ItemView: class {
@@ -25,6 +27,16 @@ vi.mock('obsidian', () => ({
         setValue(value: string) { el.value = value; return component; },
         setPlaceholder(value: string) { el.placeholder = value; return component; },
         onChange(action: (value: string) => void) { el.addEventListener('input', () => action(el.value)); return component; },
+      };
+      configure(component); return this;
+    }
+    addDropdown(configure: (dropdown: unknown) => void) {
+      const el = document.createElement('select'); this.el.append(el);
+      const component = {
+        setDisabled(value: boolean) { el.disabled = value; return component; },
+        addOptions(options: Record<string, string>) { for (const [value, label] of Object.entries(options)) { const option = document.createElement('option'); option.value = value; option.textContent = label; el.append(option); } return component; },
+        setValue(value: string) { el.value = value; return component; },
+        onChange(action: (value: string) => void) { el.addEventListener('change', () => action(el.value)); return component; },
       };
       configure(component); return this;
     }
@@ -91,29 +103,29 @@ it('edits and reorders article rules as a draft and preserves them through valid
   const tab = new FeedReaderSettingTab({} as never, plugin as never);
   tab.display();
   const section = tab.containerEl.querySelector('.vfr-enrichment-settings')!;
-  clickNamed(section, '新增標題規則');
-  editInput(inputsNamed(section, '標題文字')[0]!, 'Full article');
-  clickNamed(section, '新增全文條件');
-  editInput(inputsNamed(section, 'Properties 欄位')[0]!, 'type');
-  editInput(inputsNamed(section, '符合值')[0]!, 'clipping');
-  clickNamed(section, '新增標題規則');
-  editInput(inputsNamed(section, '標題文字')[1]!, '正文');
+  clickNamed(section, "Add heading rule");
+  editInput(inputsNamed(section, "Heading text")[0]!, 'Full article');
+  clickNamed(section, "Add whole-body rule");
+  editInput(inputsNamed(section, "Property field")[0]!, 'type');
+  editInput(inputsNamed(section, "Matching value")[0]!, 'clipping');
+  clickNamed(section, "Add heading rule");
+  editInput(inputsNamed(section, "Heading text")[1]!, '正文');
   const arrows = [...section.querySelectorAll('button')].filter(button => button.textContent === '↑');
   arrows[1]!.click();
-  expect(section.textContent).toContain('規則 1 · 整份正文');
-  editInput(inputsNamed(section, '原文網址欄位')[0]!, '');
-  clickNamed(section, '套用文章設定');
-  await vi.waitFor(() => expect(section.textContent).toContain('至少設定一個原文網址欄位'));
+  expect(section.textContent).toContain('Rule 1 · Whole body');
+  editInput(inputsNamed(section, "Original URL fields")[0]!, '');
+  clickNamed(section, "Apply article settings");
+  await vi.waitFor(() => expect(section.textContent).toContain('Configure at least one original URL field'));
   expect(plugin.changeEnrichment).not.toHaveBeenCalled();
   expect(settings.enrichment.rules).toEqual([]);
-  editInput(inputsNamed(section, '原文網址欄位')[0]!, 'feed_reader_url, source');
-  clickNamed(section, '套用文章設定');
+  editInput(inputsNamed(section, "Original URL fields")[0]!, 'feed_reader_url, source');
+  clickNamed(section, "Apply article settings");
   await vi.waitFor(() => expect(section.textContent).toContain('cannot save'));
-  expect(inputsNamed(section, '標題文字').map(input => input.value)).toEqual(['Full article', '正文']);
-  expect(inputsNamed(section, 'Properties 欄位')[0]!.value).toBe('type');
+  expect(inputsNamed(section, "Heading text").map(input => input.value)).toEqual(['Full article', '正文']);
+  expect(inputsNamed(section, "Property field")[0]!.value).toBe('type');
   plugin.changeEnrichment.mockImplementation(async () => {});
-  clickNamed(section, '套用文章設定');
-  await vi.waitFor(() => expect(section.textContent).toContain('文章設定已儲存'));
+  clickNamed(section, "Apply article settings");
+  await vi.waitFor(() => expect(section.textContent).toContain("Article settings saved"));
   expect(plugin.changeEnrichment).toHaveBeenLastCalledWith(expect.objectContaining({
     urlFields: ['feed_reader_url', 'source'],
     rules: [
@@ -138,24 +150,24 @@ it('keeps local command edits and the default agent in a draft until Apply', asy
   const tab = new FeedReaderSettingTab({} as never, plugin as never);
   tab.display();
   const section = tab.containerEl.querySelector('.vfr-enrichment-settings')!;
-  await vi.waitFor(() => expect(section.textContent).toContain('Codex · 已偵測'));
-  editInput(inputsNamed(section, '執行檔名稱或絕對路徑')[1]!, '/custom/bin/claude');
-  editInput(inputsNamed(section, '自訂參數')[1]!, '-p --model "preferred model"');
-  const defaults = [...section.querySelectorAll('button')].filter(button => button.textContent === '設為預設');
+  await vi.waitFor(() => expect(section.textContent).toContain('Codex · Detected'));
+  editInput(inputsNamed(section, "Executable name or absolute path")[1]!, '/custom/bin/claude');
+  editInput(inputsNamed(section, "Custom arguments")[1]!, '-p --model "preferred model"');
+  const defaults = [...section.querySelectorAll('button')].filter(button => button.textContent === "Set as default");
   defaults[1]!.click();
   expect(controller.saveLocal).not.toHaveBeenCalled();
   expect(local.defaultId).toBe('codex');
   expect(local.agents[1]!.command).toBe('claude');
-  editInput(inputsNamed(section, '自訂參數')[1]!, '-p "unterminated');
-  clickNamed(section, '套用本機設定');
+  editInput(inputsNamed(section, "Custom arguments")[1]!, '-p "unterminated');
+  clickNamed(section, "Apply local settings");
   expect(controller.saveLocal).not.toHaveBeenCalled();
-  expect(inputsNamed(section, '執行檔名稱或絕對路徑')[1]!.value).toBe('/custom/bin/claude');
-  editInput(inputsNamed(section, '自訂參數')[1]!, '-p --model "preferred model"');
-  clickNamed(section, '套用本機設定');
+  expect(inputsNamed(section, "Executable name or absolute path")[1]!.value).toBe('/custom/bin/claude');
+  editInput(inputsNamed(section, "Custom arguments")[1]!, '-p --model "preferred model"');
+  clickNamed(section, "Apply local settings");
   expect(controller.saveLocal).toHaveBeenCalledWith(expect.objectContaining({ defaultId: 'claude', agents: expect.arrayContaining([
     expect.objectContaining({ id: 'claude', command: '/custom/bin/claude', args: '-p --model "preferred model"' }),
   ]) }));
-  clickNamed(section, '重新偵測已儲存設定');
+  clickNamed(section, "Detect saved configurations again");
   await vi.waitFor(() => expect(controller.detect).toHaveBeenCalledTimes(2));
   tab.hide();
 });
@@ -189,4 +201,45 @@ it('previews unsaved edits, blocks invalid templates, and keeps the draft after 
   button.click();
   await vi.waitFor(() => expect(section.textContent).toContain('Templates saved'));
   expect(plugin.changeNoteTemplates).toHaveBeenLastCalledWith(expect.objectContaining({ noteBodyTemplate: body.value, notePropertiesTemplate: properties.value }));
+});
+
+it('renders Chinese settings while preserving templates and saves language only on selection', async () => {
+  const { configureLanguage } = await import('../../src/i18n');
+  configureLanguage('zh-TW', 'en');
+  try {
+    const settings = structuredClone(DEFAULT_SETTINGS);
+    const before = structuredClone(settings);
+    const changeLanguage = vi.fn(async (language: string) => { settings.language = language as typeof settings.language; });
+    const tab = new FeedReaderSettingTab({} as never, { settings, changeLanguage } as never);
+    tab.display();
+    expect(tab.containerEl.textContent).toContain('訂閱 YAML');
+    expect(tab.containerEl.textContent).toContain('文章全文與 AI 摘要');
+    expect(tab.containerEl.textContent).toContain('停用並重新啟用');
+    expect(settings).toEqual(before);
+    const draftInput = inputsNamed(tab.containerEl, '文章保存資料夾')[0]!;
+    editInput(draftInput, 'Unsaved folder');
+    const select = tab.containerEl.querySelector('select')!;
+    expect([...select.options].map(option => option.value)).toEqual(['auto', 'en', 'zh-TW']);
+    select.value = 'en'; select.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(changeLanguage).toHaveBeenCalledWith('en'));
+    expect(inputsNamed(tab.containerEl, '文章保存資料夾')[0]!.value).toBe('Unsaved folder');
+    expect(settings.noteBodyTemplate).toBe(before.noteBodyTemplate);
+    expect(settings.enrichment).toEqual(before.enrichment);
+  } finally { configureLanguage('en', 'en'); }
+});
+
+it('persists the language preference and rolls back after a failed write', async () => {
+  const { default: FeedReaderPlugin } = await import('../../src/main');
+  const { configureLanguage, getLocale } = await import('../../src/i18n');
+  configureLanguage('en', 'en');
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  const saveSettings = vi.fn(async () => {});
+  const plugin = { settings, saveSettings };
+  await FeedReaderPlugin.prototype.changeLanguage.call(plugin as never, 'zh-TW');
+  expect(settings.language).toBe('zh-TW');
+  expect(saveSettings).toHaveBeenCalledOnce();
+  expect(getLocale()).toBe('en'); // Active UI changes only on reload.
+  saveSettings.mockRejectedValueOnce(new Error('disk full'));
+  await expect(FeedReaderPlugin.prototype.changeLanguage.call(plugin as never, 'en')).rejects.toThrow('disk full');
+  expect(settings.language).toBe('zh-TW');
 });

@@ -328,3 +328,22 @@ it('routes OPML export and import through the selected format and confirms repla
   await vi.waitFor(() => expect(service.import).toHaveBeenCalledWith(exported, 'opml', 'replace'));
   await view.onClose();
 });
+
+it('renders Chinese navigation without translating source names', async () => {
+  const { configureLanguage } = await import('../../src/i18n');
+  configureLanguage('zh-TW', 'en');
+  const contentEl = document.createElement('div');
+  const view = new SourcesView({ contentEl } as never, {
+    subscriptions: {
+      getSnapshot: () => ({ writable: true, document: { version: 1, feeds: [feed], folders: [{ id: 'folder-1', title: 'My folder' }] } }),
+      subscribe: () => () => {},
+    },
+  });
+  try {
+    await view.onOpen();
+    expect(view.getDisplayText()).toBe('RSS 來源');
+    expect(contentEl.textContent).toContain('全部文章');
+    expect(contentEl.textContent).toContain('A feed');
+    expect(contentEl.querySelector('[aria-label="展開／收合 My folder"]')).not.toBeNull();
+  } finally { await view.onClose(); configureLanguage('en', 'en'); }
+});

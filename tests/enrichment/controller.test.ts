@@ -91,7 +91,7 @@ it('captures the starting file even after the active note changes and rejects st
   expect(await access.compareAndWrite('New user edit', 'Fetched article')).toBe(true);
   expect(context.app.vault.process).toHaveBeenLastCalledWith(context.file, expect.any(Function));
   finish(true);
-  await vi.waitFor(() => expect(mocks.notices).toContain('文章筆記已更新'));
+  await vi.waitFor(() => expect(mocks.notices).toContain("Article note updated"));
 });
 
 it('prevents duplicate work on the same file and cancellation prevents writes', async () => {
@@ -105,11 +105,11 @@ it('prevents duplicate work on the same file and cancellation prevents writes', 
   context.commands[0]!.checkCallback(false);
   context.commands[1]!.checkCallback(false);
   expect(mocks.enrich).toHaveBeenCalledTimes(1);
-  expect(mocks.notices).toContain('此筆記已有工作進行中');
+  expect(mocks.notices).toContain("This note already has an operation in progress");
   const fragment = mocks.notices.find(item => typeof item !== 'string') as DocumentFragment;
   fragment.querySelector('button')!.click();
   expect(signal.aborted).toBe(true);
-  await expect(access.compareAndWrite('Original article', 'Replacement')).rejects.toThrow('取消');
+  await expect(access.compareAndWrite('Original article', 'Replacement')).rejects.toThrow("Operation cancelled");
   expect(context.content()).toBe('Original article');
   finish(false);
 });
@@ -125,7 +125,7 @@ it('unload aborts pending work and prevents late writes', async () => {
   context.commands[2]!.checkCallback(false);
   context.cleanups[0]!();
   expect(signal.aborted).toBe(true);
-  await expect(access.compareAndWrite('Original article', 'Late result')).rejects.toThrow('取消');
+  await expect(access.compareAndWrite('Original article', 'Late result')).rejects.toThrow("Operation cancelled");
   expect(context.app.vault.process).not.toHaveBeenCalled();
   finish(false);
 });

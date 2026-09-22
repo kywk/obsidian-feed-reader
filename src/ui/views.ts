@@ -1,3 +1,4 @@
+import { t, getLocale } from '../i18n';
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from 'obsidian';
 import type { Article, ArticleFilter, ArticleSummary, FeedReadState, FeedSource, SubscriptionDocument } from '../domain/models';
 import type { ArticleCache } from '../cache';
@@ -72,7 +73,7 @@ export class SourcesView extends ItemView {
     super(leaf); this.state = dependencies.state ?? createReaderUiState();
   }
   getViewType(): string { return SOURCES_VIEW; }
-  getDisplayText(): string { return 'RSS sources'; }
+  getDisplayText(): string { return t("RSS sources"); }
   getIcon(): string { return 'rss'; }
   async onOpen(): Promise<void> {
     this.closed = false;
@@ -122,26 +123,26 @@ export class SourcesView extends ItemView {
     const root = this.contentEl.createDiv({ cls: 'vfr-sources' });
     const header = root.createDiv({ cls: 'vfr-sidebar-header' });
     setIcon(header.createSpan({ cls: 'vfr-nav-icon' }), 'rss');
-    header.createSpan({ text: 'Feed Reader', cls: 'vfr-sidebar-title' });
-    const nav = root.createDiv({ cls: 'vfr-navigation', attr: { 'aria-label': 'Reader navigation' } });
+    header.createSpan({ text: t("Feed Reader"), cls: 'vfr-sidebar-title' });
+    const nav = root.createDiv({ cls: 'vfr-navigation', attr: { 'aria-label': t("Reader navigation") } });
     for (const [filter, icon] of [['today', 'calendar-days'], ['unread', 'circle-dot'], ['saved', 'bookmark'], ['read', 'history']] as const) {
       this.row(nav, labelForFilter(filter), icon, { kind: 'global', filter });
     }
     const actions = root.createDiv({ cls: 'vfr-sidebar-tools' });
-    this.action(actions, 'Manage sources', 'list-plus', () => this.dependencies.onManageSubscriptions?.());
-    this.action(actions, 'Refresh', 'refresh-cw', () => this.dependencies.onRefresh?.(snapshot?.document.feeds ?? []));
-    this.action(actions, 'Mark scope read', 'check-check', () => this.state.requestMarkAllRead());
-    if (!snapshot) { root.createEl('p', { text: 'Reader services are not available yet.' }); return; }
+    this.action(actions, t("Manage sources"), 'list-plus', () => this.dependencies.onManageSubscriptions?.());
+    this.action(actions, t("Refresh"), 'refresh-cw', () => this.dependencies.onRefresh?.(snapshot?.document.feeds ?? []));
+    this.action(actions, t("Mark scope read"), 'check-check', () => this.state.requestMarkAllRead());
+    if (!snapshot) { root.createEl('p', { text: t("Reader services are not available yet.") }); return; }
     if (snapshot.error) root.createEl('p', { cls: 'vfr-error', text: snapshot.error.message });
-    root.createDiv({ cls: 'vfr-section-label', text: 'Feeds' });
-    this.row(root, 'All articles', 'list-filter', { kind: 'global', filter: 'all' }, snapshot.document.feeds.map(feed => feed.id));
-    if (!snapshot.document.feeds.length) root.createEl('p', { cls: 'vfr-empty-sources', text: 'Add your first source to start reading.' });
+    root.createDiv({ cls: 'vfr-section-label', text: t("Feeds") });
+    this.row(root, t("All articles"), 'list-filter', { kind: 'global', filter: 'all' }, snapshot.document.feeds.map(feed => feed.id));
+    if (!snapshot.document.feeds.length) root.createEl('p', { cls: 'vfr-empty-sources', text: t("Add your first source to start reading.") });
     for (const folder of snapshot.document.folders) {
       const feeds = snapshot.document.feeds.filter(feed => feed.folderIds.includes(folder.id));
       const section = root.createDiv({ cls: 'vfr-folder' });
       const heading = section.createDiv({ cls: 'vfr-folder-heading' });
       const collapsed = this.collapsed.has(folder.id);
-      const toggle = heading.createEl('button', { cls: 'vfr-folder-toggle clickable-icon', attr: { 'aria-label': `Toggle ${folder.title}`, 'aria-expanded': String(!collapsed) } });
+      const toggle = heading.createEl('button', { cls: 'vfr-folder-toggle clickable-icon', attr: { 'aria-label': t('Toggle {title}', { title: folder.title }), 'aria-expanded': String(!collapsed) } });
       setIcon(toggle, collapsed ? 'chevron-right' : 'chevron-down');
       const children = section.createDiv({ cls: 'vfr-folder-children' });
       children.hidden = collapsed;
@@ -156,7 +157,7 @@ export class SourcesView extends ItemView {
     }
     const unfiled = snapshot.document.feeds.filter(feed => !feed.folderIds.length);
     if (unfiled.length) {
-      root.createDiv({ cls: 'vfr-section-label', text: 'Unfiled' });
+      root.createDiv({ cls: 'vfr-section-label', text: t("Unfiled") });
       unfiled.forEach(feed => this.feedRow(root, feed));
     }
     this.updateSelection();
@@ -228,12 +229,12 @@ export class ReaderView extends ItemView {
     this.readerScope = this.state.getScope();
   }
   getViewType(): string { return READER_VIEW; }
-  getDisplayText(): string { return 'RSS reader'; }
+  getDisplayText(): string { return t("RSS reader"); }
   getIcon(): string { return 'rss'; }
   async onOpen(): Promise<void> {
     this.closed = false;
     this.contentEl.empty();
-    this.root = this.contentEl.createDiv({ cls: 'vfr-reader', attr: { tabindex: '0', 'aria-label': 'RSS reader' } });
+    this.root = this.contentEl.createDiv({ cls: 'vfr-reader', attr: { tabindex: '0', 'aria-label': t("RSS reader") } });
     this.listEl = this.root.createDiv({ cls: 'vfr-list' });
     this.articleEl = this.root.createDiv({ cls: 'vfr-content' });
     this.root.addEventListener('keydown', event => void this.onKeyDown(event).catch(error => this.showError(error)));
@@ -333,32 +334,32 @@ export class ReaderView extends ItemView {
     list.empty();
     const heading = list.createDiv({ cls: 'vfr-list-heading' });
     heading.createEl('h1', { text: this.scopeLabel() });
-    heading.createEl('p', { cls: 'vfr-list-description', text: 'Choose an article to read · j / k to navigate' });
+    heading.createEl('p', { cls: 'vfr-list-description', text: t("Choose an article to read · j / k to navigate") });
     const filters = list.createDiv({ cls: 'vfr-filter-actions' });
     for (const filter of ['all', 'unread', 'read', 'today'] as const) {
       const button = filters.createEl('button', { text: labelForFilter(filter) });
       button.setAttribute('aria-pressed', String(this.readerScope.filter === filter));
       button.addEventListener('click', () => this.setScopeFilter(filter));
     }
-    const search = list.createEl('input', { type: 'search', placeholder: 'Search titles', cls: 'vfr-search' });
+    const search = list.createEl('input', { type: 'search', placeholder: t("Search titles"), cls: 'vfr-search' });
     search.value = this.search?.value ?? '';
     search.addEventListener('input', () => { this.query = search.value; void this.applyScope(this.readerScope); }); this.search = search;
     const more = list.createEl('details', { cls: 'vfr-batch-menu' });
-    more.createEl('summary', { text: 'Reading actions' });
+    more.createEl('summary', { text: t("Reading actions") });
     const actions = more.createDiv({ cls: 'vfr-list-actions' });
-    const batch = actions.createEl('button', { text: 'Mark scope read' }); batch.addEventListener('click', () => void this.markScopeRead().catch(error => this.showError(error)));
-    const date = actions.createEl('input', { type: 'date', attr: { 'aria-label': 'Mark articles before local date' } });
-    const before = actions.createEl('button', { text: 'Mark before date' });
+    const batch = actions.createEl('button', { text: t("Mark scope read") }); batch.addEventListener('click', () => void this.markScopeRead().catch(error => this.showError(error)));
+    const date = actions.createEl('input', { type: 'date', attr: { 'aria-label': t("Mark articles before local date") } });
+    const before = actions.createEl('button', { text: t("Mark before date") });
     before.addEventListener('click', () => {
-      if (!date.value) { this.showError('Choose a local cutoff date'); return; }
+      if (!date.value) { this.showError(t("Choose a local cutoff date")); return; }
       const cutoff = new Date(`${date.value}T00:00:00`);
       void this.markScopeRead(cutoff).catch(error => this.showError(error));
     });
-    actions.createEl('small', { text: 'Applies to the entire source, folder, or global scope, regardless of search and filter. Date excludes that local day.' });
-    const refresh = actions.createEl('button', { text: 'Refresh' });
+    actions.createEl('small', { text: t("Applies to the entire source, folder, or global scope, regardless of search and filter. Date excludes that local day.") });
+    const refresh = actions.createEl('button', { text: t("Refresh") });
     refresh.addEventListener('click', () => void this.refreshFromSource().catch(error => this.showError(error)));
     if (error ?? this.stateError) list.createEl('p', { cls: 'vfr-error', text: error ?? this.stateError! });
-    if (this.loading) list.createEl('p', { text: 'Loading articles…' });
+    if (this.loading) list.createEl('p', { text: t("Loading articles…") });
     this.renderRows(search.value);
     list.scrollTop = scroll;
     if (restoreSearch) { search.focus(); search.setSelectionRange(start ?? search.value.length, end ?? search.value.length); }
@@ -368,14 +369,14 @@ export class ReaderView extends ItemView {
   private renderRows(query: string): void {
     const list = this.listEl; if (!list) return;
     list.querySelector('.vfr-rows')?.remove(); list.querySelector('.vfr-page-controls')?.remove();
-    const rows = list.createDiv({ cls: 'vfr-rows', attr: { role: 'listbox', 'aria-label': 'Articles' } });
+    const rows = list.createDiv({ cls: 'vfr-rows', attr: { role: 'listbox', 'aria-label': t("Articles") } });
     const visible = this.summaries.slice(0, PAGE_SIZE);
-    if (!visible.length && !this.loading) rows.createEl('p', { text: 'No articles match this view.' });
+    if (!visible.length && !this.loading) rows.createEl('p', { text: t("No articles match this view.") });
     for (const summary of visible) {
       const index = this.summaries.indexOf(summary);
       const row = rows.createEl('button', { cls: `vfr-article-row${index === this.selectedIndex ? ' is-selected' : ''}`, attr: { role: 'option', 'aria-selected': String(index === this.selectedIndex) } });
-      row.createSpan({ cls: 'vfr-article-source', text: this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === summary.feedId)?.title ?? 'Saved article' });
-      row.createSpan({ cls: 'vfr-article-title', text: summary.title || 'Untitled article' });
+      row.createSpan({ cls: 'vfr-article-source', text: this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === summary.feedId)?.title ?? t("Saved article") });
+      row.createSpan({ cls: 'vfr-article-title', text: summary.title || t("Untitled article") });
       row.createSpan({ cls: 'vfr-article-date', text: formatDate(summary) });
       if (!this.articleRead(summary)) row.addClass('is-unread');
       row.addEventListener('click', () => { this.selectedIndex = index; void this.openSelected().catch(error => this.showError(error)); });
@@ -383,19 +384,19 @@ export class ReaderView extends ItemView {
     if (this.nextCursor || this.pageHistory.length) {
       const controls = list.createDiv({ cls: 'vfr-page-controls' });
       if (this.pageHistory.length) {
-        const previous = controls.createEl('button', { text: 'Previous page' });
+        const previous = controls.createEl('button', { text: t("Previous page") });
         previous.addEventListener('click', () => void this.changePage(-1));
       }
       if (this.nextCursor) {
-        const next = controls.createEl('button', { text: 'Next 50 articles' });
+        const next = controls.createEl('button', { text: t("Next 50 articles") });
         next.addEventListener('click', () => void this.changePage(1));
       }
     }
   }
   private scopeLabel(): string {
     const doc = this.dependencies.subscriptions?.getSnapshot().document, scope = this.readerScope;
-    return scope.kind === 'feed' ? doc?.feeds.find(feed => feed.id === scope.feedId)?.title ?? 'Source articles'
-      : scope.kind === 'folder' ? doc?.folders.find(folder => folder.id === scope.folderId)?.title ?? 'Folder articles' : labelForFilter(scope.filter);
+    return scope.kind === 'feed' ? doc?.feeds.find(feed => feed.id === scope.feedId)?.title ?? t("Source articles")
+      : scope.kind === 'folder' ? doc?.folders.find(folder => folder.id === scope.folderId)?.title ?? t("Folder articles") : labelForFilter(scope.filter);
   }
   private showList(focus = true): void {
     this.openedKey = undefined;
@@ -467,10 +468,10 @@ export class ReaderView extends ItemView {
       await this.dependencies.onOpenSavedArticle(selected); return;
     }
     if (!this.dependencies.cache) return;
-    this.openedKey = articleKey(selected); this.showArticle(); this.renderArticlePlaceholder('Loading article…');
+    this.openedKey = articleKey(selected); this.showArticle(); this.renderArticlePlaceholder(t("Loading article…"));
     try {
       const article = await this.dependencies.cache.getArticle(selected.feedId, selected.id);
-      if (!article) throw new Error('The article is no longer in the cache.');
+      if (!article) throw new Error(t("The article is no longer in the cache."));
       if (this.openedKey !== articleKey(selected)) return;
       this.renderArticle(article); await this.markRead(article);
     } catch (error) { if (!this.closed && this.openedKey === articleKey(selected)) this.renderArticlePlaceholder(message(error), true); }
@@ -480,32 +481,32 @@ export class ReaderView extends ItemView {
     container.empty(); this.articleNavigation(container);
     const reading = container.createDiv({ cls: 'vfr-reading-column' });
     reading.createEl('p', { cls: 'vfr-article-meta', text: `${this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === article.feedId)?.title ?? ''} · ${formatDate(article)}` });
-    reading.createEl('h1', { text: article.title || 'Untitled article' });
+    reading.createEl('h1', { text: article.title || t("Untitled article") });
     const actions = reading.createDiv({ cls: 'vfr-article-actions' });
     if (article.url && isSafeHttpUrl(article.url)) {
-      const link = actions.createEl('a', { text: 'Open original', href: article.url });
+      const link = actions.createEl('a', { text: t("Open original"), href: article.url });
       link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
     }
-    const save = actions.createEl('button', { text: 'Save / open note' });
+    const save = actions.createEl('button', { text: t("Save / open note") });
     save.addEventListener('click', () => void Promise.resolve(this.dependencies.onSaveArticle?.(article)).catch(error => this.showError(error)));
-    const read = actions.createEl('button', { text: 'Toggle read / unread' });
+    const read = actions.createEl('button', { text: t("Toggle read / unread") });
     read.addEventListener('click', () => void this.toggleRead().catch(error => this.showError(error)));
     const body = reading.createDiv({ cls: 'vfr-article-body markdown-rendered' });
     body.append(sanitizeArticleFragment(article.contentHtml, this.sourceUrl(article.feedId)));
     for (const link of body.querySelectorAll('a[href]')) {
       link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
     }
-    if (!body.textContent?.trim() && !body.children.length) body.createEl('p', { text: 'This source did not provide article content.' });
+    if (!body.textContent?.trim() && !body.children.length) body.createEl('p', { text: t("This source did not provide article content.") });
   }
   private articleNavigation(container: HTMLElement): void {
     const nav = container.createDiv({ cls: 'vfr-article-navigation' });
-    const back = nav.createEl('button', { text: 'Back to list', attr: { 'aria-label': 'Back to list (Escape)' } });
+    const back = nav.createEl('button', { text: t("Back to list"), attr: { 'aria-label': t("Back to list (Escape)") } });
     back.addEventListener('click', () => this.showList());
     nav.createSpan({ cls: 'vfr-navigation-scope', text: this.scopeLabel() });
-    const previous = nav.createEl('button', { text: 'Previous', attr: { 'aria-label': 'Previous article (k)' } });
+    const previous = nav.createEl('button', { text: t("Previous"), attr: { 'aria-label': t("Previous article (k)") } });
     previous.disabled = this.selectedIndex <= 0 && !this.pageHistory.length;
     previous.addEventListener('click', () => void this.move(-1).catch(error => this.showError(error)));
-    const next = nav.createEl('button', { text: 'Next', attr: { 'aria-label': 'Next article (j)' } });
+    const next = nav.createEl('button', { text: t("Next"), attr: { 'aria-label': t("Next article (j)") } });
     next.disabled = this.selectedIndex >= this.summaries.length - 1 && !this.nextCursor;
     next.addEventListener('click', () => void this.move(1).catch(error => this.showError(error)));
   }
@@ -514,12 +515,12 @@ export class ReaderView extends ItemView {
   }
   private renderArticlePlaceholder(text: string, failure = false): void {
     if (!this.articleEl) return;
-    this.articleEl.empty(); if (this.openedKey) this.articleNavigation(this.articleEl); this.articleEl.createEl('h2', { text: failure ? 'Could not open article' : text });
+    this.articleEl.empty(); if (this.openedKey) this.articleNavigation(this.articleEl); this.articleEl.createEl('h2', { text: failure ? t("Could not open article") : text });
     if (failure) this.articleEl.createEl('p', { cls: 'vfr-error', text });
   }
   private renderUnavailable(): void {
-    this.renderArticlePlaceholder('Reader services are not available yet.');
-    this.listEl?.empty(); this.listEl?.createEl('p', { text: 'Reader services are not available yet.' });
+    this.renderArticlePlaceholder(t("Reader services are not available yet."));
+    this.listEl?.empty(); this.listEl?.createEl('p', { text: t("Reader services are not available yet.") });
   }
   private selected(): ArticleSummary | undefined { return this.selectedIndex < 0 ? undefined : this.summaries[this.selectedIndex]; }
   private articleRead(article: ArticleSummary): boolean { const state = this.states.get(article.feedId); return state ? isArticleRead(state, article) : false; }
@@ -580,8 +581,8 @@ export class ReaderView extends ItemView {
 
 function articleKey(article: ArticleSummary): string { return `${article.feedId}\u0000${article.id}`; }
 function scopeFilter(scope: ReaderScope): ArticleFilter { return scope.filter; }
-function labelForFilter(filter: ArticleFilter): string { return ({ all: 'All articles', unread: 'Unread', read: 'Read', today: 'Today', saved: 'Saved' })[filter]; }
-function scopeTitle(scope: ReaderScope): string { return scope.kind === 'global' ? labelForFilter(scope.filter) : scope.kind === 'feed' ? 'Source articles' : 'Folder articles'; }
+function labelForFilter(filter: ArticleFilter): string { return ({ all: t("All articles"), unread: t("Unread"), read: t("Read"), today: t("Today"), saved: t("Saved") })[filter]; }
+function scopeTitle(scope: ReaderScope): string { return scope.kind === 'global' ? labelForFilter(scope.filter) : scope.kind === 'feed' ? t("Source articles") : t("Folder articles"); }
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function isSafeHttpUrl(value: string): boolean { try { const url = new URL(value); return url.protocol === 'http:' || url.protocol === 'https:'; } catch { return false; } }
 function isEditingTarget(target: EventTarget | null): boolean {
@@ -594,5 +595,5 @@ function isToday(article: ArticleSummary, now = new Date()): boolean {
 }
 function formatDate(article: ArticleSummary): string {
   const date = new Date(effectiveArticleTimestamp(article));
-  return Number.isFinite(date.getTime()) ? date.toLocaleDateString() : '';
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString(getLocale()) : '';
 }

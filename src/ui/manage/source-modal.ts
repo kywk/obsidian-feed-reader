@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { App, Modal, Notice, Setting, type ButtonComponent, type TextComponent } from 'obsidian';
 import type { FeedSource } from '../../domain/models';
 import type { SubscriptionService } from '../../subscriptions';
@@ -12,21 +13,21 @@ export class AddSourceModal extends Modal {
 
   onOpen(): void {
     this.closed = false;
-    this.titleEl.setText('Add RSS / Atom source');
+    this.titleEl.setText(t("Add RSS / Atom source"));
     let title = '', url = '';
     const folders = new Set<string>();
     let titleInput: TextComponent, submit: ButtonComponent;
-    new Setting(this.contentEl).setName('Feed URL').setDesc('Enter an RSS or Atom URL. Leave Title blank to detect it automatically.')
+    new Setting(this.contentEl).setName(t("Feed URL")).setDesc(t("Enter an RSS or Atom URL. Leave Title blank to detect it automatically."))
       .addText(text => text.setPlaceholder('https://example.com/feed.xml').onChange(value => { url = value; }));
-    new Setting(this.contentEl).setName('Title').addText(text => { titleInput = text; text.onChange(value => { title = value; }); });
+    new Setting(this.contentEl).setName(t("Title")).addText(text => { titleInput = text; text.onChange(value => { title = value; }); });
     for (const folder of this.service.getSnapshot().document.folders) new Setting(this.contentEl).setName(folder.title)
       .addToggle(toggle => toggle.setValue(false).onChange(value => { if (value) folders.add(folder.id); else folders.delete(folder.id); }));
     const status = this.contentEl.createEl('p', { attr: { role: 'status', 'aria-live': 'polite' } });
     new Setting(this.contentEl)
-      .addButton(button => button.setButtonText('Cancel').onClick(() => this.close()))
+      .addButton(button => button.setButtonText(t("Cancel")).onClick(() => this.close()))
       .addButton(button => {
         submit = button;
-        button.setButtonText('Add source').setCta().setDisabled(!this.service.getSnapshot().writable).onClick(() => { void save(); });
+        button.setButtonText(t("Add source")).setCta().setDisabled(!this.service.getSnapshot().writable).onClick(() => { void save(); });
       });
     const save = async (): Promise<void> => {
       if (this.closed || this.busy || !this.service.getSnapshot().writable) return;
@@ -35,21 +36,21 @@ export class AddSourceModal extends Modal {
       this.request = new AbortController();
       try {
         if (!title.trim()) {
-          status.setText('Detecting feed title…');
+          status.setText(t("Detecting feed title…"));
           const detected = await fetchFeedTitle(submittedUrl, this.transport, this.request.signal);
           if (this.closed) return;
-          if (url.trim() !== submittedUrl) { status.setText('Feed URL changed. Click Add source again.'); return; }
+          if (url.trim() !== submittedUrl) { status.setText(t("Feed URL changed. Click Add source again.")); return; }
           // Keep a title typed while detection was running.
           if (!title.trim()) { title = detected; titleInput.setValue(title); }
         }
         if (this.closed) return;
-        status.setText('Saving source…');
+        status.setText(t('Saving source…'));
         const source = await this.service.addFeed({ title: title.trim(), url: submittedUrl, folderIds: [...folders] });
         if (this.closed) return;
         this.close();
-        try { await this.refresh([source]); } catch { new Notice('Source added, but refresh failed. Try Refresh again.'); }
+        try { await this.refresh([source]); } catch { new Notice(t('Source added, but refresh failed. Try Refresh again.')); }
       } catch (error) {
-        if (!this.closed) status.setText(error instanceof Error ? error.message : 'Could not add the source. Your draft has been kept.');
+        if (!this.closed) status.setText(error instanceof Error ? error.message : t('Could not add the source. Your draft has been kept.'));
       } finally {
         this.busy = false; this.request = undefined;
         if (!this.closed) submit.setDisabled(!this.service.getSnapshot().writable);

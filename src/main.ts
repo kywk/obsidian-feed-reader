@@ -1,4 +1,5 @@
-import { FileSystemAdapter, Notice, Plugin, TFile, requestUrl } from 'obsidian';
+import { t, configureLanguage, normalizeLanguage, type Language } from './i18n';
+import { getLanguage, FileSystemAdapter, Notice, Plugin, TFile, requestUrl } from 'obsidian';
 import { DEFAULT_SETTINGS, FeedReaderSettingTab, isVaultRelative, type FeedReaderSettings } from './settings';
 import { READER_VIEW, ReaderView, SOURCES_VIEW, SourcesView, createReaderUiState, type ReaderViewDependencies } from './ui/views';
 import { SubscriptionService, VaultSubscriptionStorage } from './subscriptions';
@@ -36,9 +37,11 @@ export default class FeedReaderPlugin extends Plugin {
   async onload(): Promise<void> {
     this.stopped = false;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings.language = normalizeLanguage(this.settings.language);
+    configureLanguage(this.settings.language, getLanguage());
     this.settings.enrichment = { ...structuredClone(DEFAULT_ENRICHMENT), ...this.settings.enrichment };
     const adapter = this.app.vault.adapter;
-    if (!(adapter instanceof FileSystemAdapter)) throw new Error('Vault Feed Reader requires a desktop vault');
+    if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("Vault Feed Reader requires a desktop vault"));
     this.cache = new IndexedDbArticleCache(adapter.getBasePath());
     this.subscriptions = new SubscriptionService(new VaultSubscriptionStorage(this.app.vault), this.settings.subscriptionsPath);
     this.readState = new ReadStateService(new VaultReadStateStorage(this.app.vault));
@@ -86,9 +89,9 @@ export default class FeedReaderPlugin extends Plugin {
     this.registerDomEvent(window, 'focus', () => this.scheduler.check());
     this.registerDomEvent(document, 'visibilitychange', () => this.scheduler.check());
     const open = (): void => { void this.report(() => this.openReader()); };
-    this.addRibbonIcon('rss', 'Open RSS reader', open);
-    this.addCommand({ id: 'open-reader', name: 'Open RSS reader', callback: open });
-    this.addCommand({ id: 'manage-sources', name: 'Manage sources', callback: () => this.openManager() });
+    this.addRibbonIcon('rss', t("Open RSS reader"), open);
+    this.addCommand({ id: 'open-reader', name: t("Open RSS reader"), callback: open });
+    this.addCommand({ id: 'manage-sources', name: t("Manage sources"), callback: () => this.openManager() });
     this.enrichment = new EnrichmentController(this, () => this.settings.enrichment);
     this.enrichment.register();
     this.addSettingTab(new FeedReaderSettingTab(this.app, this));
@@ -105,6 +108,12 @@ export default class FeedReaderPlugin extends Plugin {
 
   async saveSettings(): Promise<void> { await this.saveData(this.settings); }
 
+  async changeLanguage(value: Language): Promise<void> {
+    const previous = this.settings.language;
+    this.settings.language = normalizeLanguage(value);
+    try { await this.saveSettings(); } catch (error) { this.settings.language = previous; throw error; }
+  }
+
   async changeEnrichment(value: EnrichmentSettings): Promise<void> {
     validateEnrichment(value);
     const previous = this.settings.enrichment;
@@ -113,14 +122,14 @@ export default class FeedReaderPlugin extends Plugin {
   }
 
   async changeSubscriptionsPath(path: string): Promise<void> {
-    if (!isVaultRelative(path) || !/\.ya?ml$/i.test(path)) throw new Error('Choose a vault-relative .yaml or .yml path');
-    if (this.switchingPath) throw new Error('A subscriptions path change is already in progress');
+    if (!isVaultRelative(path) || !/\.ya?ml$/i.test(path)) throw new Error(t("Choose a vault-relative .yaml or .yml path"));
+    if (this.switchingPath) throw new Error(t("A subscriptions path change is already in progress"));
     const oldPath = this.settings.subscriptionsPath;
     const oldSnapshot = this.subscriptions.getSnapshot();
     this.switchingPath = true;
     try {
       const result = await this.subscriptions.setPath(path);
-      if (!result.writable) throw result.error ?? new Error('Could not load subscriptions');
+      if (!result.writable) throw result.error ?? new Error(t("Could not load subscriptions"));
       this.settings.subscriptionsPath = path;
       await this.saveSettings();
     } catch (error) {
@@ -133,7 +142,7 @@ export default class FeedReaderPlugin extends Plugin {
   }
 
   async changeSavedFolder(path: string): Promise<void> {
-    if (!isVaultRelative(path)) throw new Error('Choose a vault-relative folder');
+    if (!isVaultRelative(path)) throw new Error(t("Choose a vault-relative folder"));
     const next = this.makeSaveService(path), previous = this.settings.savedArticlesFolder;
     this.settings.savedArticlesFolder = path;
     try { await this.saveSettings(); } catch (error) { this.settings.savedArticlesFolder = previous; throw error; }
@@ -198,21 +207,21 @@ export default class FeedReaderPlugin extends Plugin {
   }
   private async saveArticle(article: Article): Promise<void> {
     const source = this.subscriptions.getSnapshot().document.feeds.find(feed => feed.id === article.feedId);
-    if (!source) throw new Error('This source is no longer subscribed');
+    if (!source) throw new Error(t("This source is no longer subscribed"));
     const result = await this.saves.save(article, source);
     if (this.stopped) return;
     await this.openNote(result.note.path);
-    this.notice(result.created ? 'Article saved' : 'Opened saved article');
+    this.notice(result.created ? t("Article saved") : t("Opened saved article"));
   }
   private async openSavedArticle(article: ArticleSummary): Promise<void> {
     const note = this.saves.findSaved(article.feedId, article.id);
-    if (!note) throw new Error('The saved note could not be found');
+    if (!note) throw new Error(t("The saved note could not be found"));
     await this.openNote(note.path);
   }
   private async openNote(path: string): Promise<void> {
     if (this.stopped) return;
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof TFile)) throw new Error(`Saved note not found: ${path}`);
+    if (!(file instanceof TFile)) throw new Error(t('Saved note not found: {path}', { path }));
     await this.app.workspace.getLeaf('tab').openFile(file);
   }
   private async reconcileSources(sources: readonly FeedSource[]): Promise<void> {
