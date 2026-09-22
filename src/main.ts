@@ -1,0 +1,237 @@
+import { FileSystemAdapter, Notice, Plugin, TFile, requestUrl } from 'obsidian';
+import { DEFAULT_SETTINGS, FeedReaderSettingTab, isVaultRelative, type FeedReaderSettings } from './settings';
+import { READER_VIEW, ReaderView, SOURCES_VIEW, SourcesView, createReaderUiState, type ReaderViewDependencies } from './ui/views';
+import { SubscriptionService, VaultSubscriptionStorage } from './subscriptions';
+import { ReadStateService, VaultReadStateStorage } from './read-state';
+import { IndexedDbArticleCache } from './cache';
+import { FeedRefreshService, createObsidianFeedTransport } from './feeds';
+import { ArticleSaveService, ObsidianSavedNoteStorage } from './save';
+import { sanitizeArticleHtml } from './ui/content';
+import { MANAGE_VIEW, ManageSubscriptionsView } from './ui/manage/subscriptions';
+import { markScopeRead } from './ui/manage/batch';
+import { ReaderScheduler } from './scheduler';
+import type { Article, ArticleSummary, FeedSource } from './domain/models';
+import { validateNoteTemplates, type NoteTemplates } from './save/templates';
+
+export default class FeedReaderPlugin extends Plugin {
+  settings: FeedReaderSettings = { ...DEFAULT_SETTINGS };
+  private subscriptions!: SubscriptionService;
+  private readState!: ReadStateService;
+  private cache!: IndexedDbArticleCache;
+  private refreshService!: FeedRefreshService;
+  private saves!: ArticleSaveService;
+  private scheduler!: ReaderScheduler;
+  private dependencies!: ReaderViewDependencies;
+  private stopped = false;
+  private openingReader?: Promise<void>;
+  private switchingPath = false;
+  private knownSources = new Set<string>();
+  private reconcileTail: Promise<void> = Promise.resolve();
+  private feedErrors = new Map<string, string>();
+  private openingManager?: Promise<void>;
+
+  async onload(): Promise<void> {
+    this.stopped = false;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const adapter = this.app.vault.adapter;
+    if (!(adapter instanceof FileSystemAdapter)) throw new Error('Vault Feed Reader requires a desktop vault');
+    this.cache = new IndexedDbArticleCache(adapter.getBasePath());
+    this.subscriptions = new SubscriptionService(new VaultSubscriptionStorage(this.app.vault), this.settings.subscriptionsPath);
+    this.readState = new ReadStateService(new VaultReadStateStorage(this.app.vault));
+    this.refreshService = new FeedRefreshService(createObsidianFeedTransport(requestUrl), this.cache);
+    this.saves = this.makeSaveService(this.settings.savedArticlesFolder);
+    this.saves.start();
+    const snapshot = await this.subscriptions.start();
+    if (this.stopped) { this.subscriptions.stop(); return; }
+    this.knownSources = new Set(snapshot.document.feeds.map(feed => feed.id));
+    this.dependencies = {
+      subscriptions: this.subscriptions, cache: this.cache, readState: this.readState,
+      state: createReaderUiState(), markReadOnNavigate: this.settings.markReadOnNavigate,
+      getSavedArticles: () => this.saves.listSavedArticles(),
+      getFeedErrors: () => this.feedErrors,
+      onManageSubscriptions: () => this.openManager(),
+      onOpenReader: () => this.openReader(),
+      onRefresh: sources => this.refreshFeeds(sources),
+      onSaveArticle: article => this.report(() => this.saveArticle(article)),
+      onOpenSavedArticle: article => this.report(() => this.openSavedArticle(article)),
+      onMarkScopeRead: request => this.report(() => markScopeRead(this.subscriptions.getSnapshot().document, this.cache, this.readState, request)),
+    };
+    this.registerView(SOURCES_VIEW, leaf => new SourcesView(leaf, this.dependencies));
+    this.registerView(READER_VIEW, leaf => new ReaderView(leaf, this.dependencies));
+    this.registerView(MANAGE_VIEW, leaf => new ManageSubscriptionsView(leaf, this.subscriptions, sources => this.refreshFeeds(sources)));
+    this.scheduler = new ReaderScheduler(() => this.refreshFeeds(this.subscriptions.getSnapshot().document.feeds), undefined, error => this.notice(error));
+    this.register(this.subscriptions.subscribe(snapshot => {
+      if (this.stopped || this.switchingPath || !snapshot.writable) return;
+      void this.reconcileSources(snapshot.document.feeds).catch(error => this.notice(error));
+    }));
+    this.register(this.readState.subscribe((_id, result) => { if (!result.ok) this.notice(`${result.error.path}: ${result.error.message}`); }));
+    const reloadState = (path: string): void => {
+      const prefix = `${this.readState.directory}/`;
+      if (this.stopped || !path.startsWith(prefix) || !path.endsWith('.json')) return;
+      const id = path.slice(prefix.length, -5);
+      if (id === 'source-ids' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)) return;
+      void this.readState.load(id, true).catch(error => this.notice(error));
+    };
+    this.registerEvent(this.app.vault.on('create', file => reloadState(file.path)));
+    this.registerEvent(this.app.vault.on('modify', file => reloadState(file.path)));
+    this.registerEvent(this.app.vault.on('delete', file => reloadState(file.path)));
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => { reloadState(oldPath); reloadState(file.path); }));
+    const syncPresence = (): void => { if (!this.stopped) this.scheduler.setPresent(this.app.workspace.getLeavesOfType(READER_VIEW).length > 0); };
+    this.registerEvent(this.app.workspace.on('layout-change', syncPresence));
+    this.app.workspace.onLayoutReady(syncPresence);
+    this.registerDomEvent(window, 'focus', () => this.scheduler.check());
+    this.registerDomEvent(document, 'visibilitychange', () => this.scheduler.check());
+    const open = (): void => { void this.report(() => this.openReader()); };
+    this.addRibbonIcon('rss', 'Open RSS reader', open);
+    this.addCommand({ id: 'open-reader', name: 'Open RSS reader', callback: open });
+    this.addCommand({ id: 'manage-sources', name: 'Manage sources', callback: () => this.openManager() });
+    this.addSettingTab(new FeedReaderSettingTab(this.app, this));
+    syncPresence();
+  }
+
+  onunload(): void {
+    this.stopped = true;
+    this.scheduler?.dispose(); this.refreshService?.dispose(); this.subscriptions?.stop(); this.saves?.dispose();
+    this.app.workspace.detachLeavesOfType(MANAGE_VIEW);
+    this.app.workspace.detachLeavesOfType(READER_VIEW); this.app.workspace.detachLeavesOfType(SOURCES_VIEW);
+    this.cache?.dispose();
+  }
+
+  async saveSettings(): Promise<void> { await this.saveData(this.settings); }
+
+  async changeSubscriptionsPath(path: string): Promise<void> {
+    if (!isVaultRelative(path) || !/\.ya?ml$/i.test(path)) throw new Error('Choose a vault-relative .yaml or .yml path');
+    if (this.switchingPath) throw new Error('A subscriptions path change is already in progress');
+    const oldPath = this.settings.subscriptionsPath;
+    const oldSnapshot = this.subscriptions.getSnapshot();
+    this.switchingPath = true;
+    try {
+      const result = await this.subscriptions.setPath(path);
+      if (!result.writable) throw result.error ?? new Error('Could not load subscriptions');
+      this.settings.subscriptionsPath = path;
+      await this.saveSettings();
+    } catch (error) {
+      this.settings.subscriptionsPath = oldPath;
+      await this.subscriptions.restorePath(oldPath, oldSnapshot);
+      throw error;
+    } finally { this.switchingPath = false; }
+    // The path is committed. Cache cleanup failures must not roll it back.
+    await this.reconcileSources(this.subscriptions.getSnapshot().document.feeds);
+  }
+
+  async changeSavedFolder(path: string): Promise<void> {
+    if (!isVaultRelative(path)) throw new Error('Choose a vault-relative folder');
+    const next = this.makeSaveService(path), previous = this.settings.savedArticlesFolder;
+    this.settings.savedArticlesFolder = path;
+    try { await this.saveSettings(); } catch (error) { this.settings.savedArticlesFolder = previous; throw error; }
+    this.saves.dispose(); this.saves = next; next.start();
+  }
+
+  async changeMarkReadOnNavigate(value: boolean): Promise<void> {
+    const previous = this.settings.markReadOnNavigate;
+    this.settings.markReadOnNavigate = value;
+    try { await this.saveSettings(); } catch (error) { this.settings.markReadOnNavigate = previous; throw error; }
+    this.dependencies.markReadOnNavigate = value;
+  }
+
+  async changeNoteTemplates(templates: NoteTemplates): Promise<void> {
+    validateNoteTemplates(templates);
+    const previous = this.settings;
+    this.settings = { ...previous, ...templates };
+    try { await this.saveSettings(); } catch (error) { this.settings = previous; throw error; }
+  }
+
+  async openReader(): Promise<void> {
+    if (this.stopped) return;
+    if (this.openingReader) return this.openingReader;
+    const opening = this.openReaderLeaves();
+    this.openingReader = opening;
+    try { await opening; }
+    finally { if (this.openingReader === opening) this.openingReader = undefined; }
+  }
+
+  private async openReaderLeaves(): Promise<void> {
+    if (this.stopped) return;
+    let sources = this.app.workspace.getLeavesOfType(SOURCES_VIEW)[0];
+    if (!sources) {
+      sources = this.app.workspace.getLeftLeaf(false) ?? undefined;
+      if (sources) await sources.setViewState({ type: SOURCES_VIEW, active: true });
+    }
+    if (this.stopped) return;
+    if (sources) await this.app.workspace.revealLeaf(sources);
+    let reader = this.app.workspace.getLeavesOfType(READER_VIEW)[0];
+    if (!reader) { reader = this.app.workspace.getLeaf('tab'); await reader.setViewState({ type: READER_VIEW, active: true }); }
+    if (this.stopped) return;
+    await this.app.workspace.revealLeaf(reader);
+    this.scheduler.setPresent(true);
+  }
+
+  private openManager(): void {
+    void this.report(async () => {
+      if (this.openingManager) return this.openingManager;
+      const opening = this.openManagerLeaf();
+      this.openingManager = opening;
+      try { await opening; }
+      finally { if (this.openingManager === opening) this.openingManager = undefined; }
+    });
+  }
+  private async openManagerLeaf(): Promise<void> {
+    let leaf = this.app.workspace.getLeavesOfType(MANAGE_VIEW)[0];
+    if (!leaf) { leaf = this.app.workspace.getLeaf('tab'); await leaf.setViewState({ type: MANAGE_VIEW, active: true }); }
+    if (!this.stopped) await this.app.workspace.revealLeaf(leaf);
+  }
+  private makeSaveService(folder: string): ArticleSaveService {
+    return new ArticleSaveService(new ObsidianSavedNoteStorage(this.app.vault, this.app.metadataCache), { folder, sanitize: sanitizeArticleHtml, templates: () => this.settings });
+  }
+  private async saveArticle(article: Article): Promise<void> {
+    const source = this.subscriptions.getSnapshot().document.feeds.find(feed => feed.id === article.feedId);
+    if (!source) throw new Error('This source is no longer subscribed');
+    const result = await this.saves.save(article, source);
+    if (this.stopped) return;
+    await this.openNote(result.note.path);
+    this.notice(result.created ? 'Article saved' : 'Opened saved article');
+  }
+  private async openSavedArticle(article: ArticleSummary): Promise<void> {
+    const note = this.saves.findSaved(article.feedId, article.id);
+    if (!note) throw new Error('The saved note could not be found');
+    await this.openNote(note.path);
+  }
+  private async openNote(path: string): Promise<void> {
+    if (this.stopped) return;
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof TFile)) throw new Error(`Saved note not found: ${path}`);
+    await this.app.workspace.getLeaf('tab').openFile(file);
+  }
+  private async reconcileSources(sources: readonly FeedSource[]): Promise<void> {
+    let added: FeedSource[] = [];
+    const operation = this.reconcileTail.then(async () => {
+      if (this.stopped) return;
+      const next = new Set(sources.map(source => source.id));
+      const removed = [...this.knownSources].filter(id => !next.has(id));
+      added = sources.filter(source => !this.knownSources.has(source.id));
+      this.knownSources = next;
+      for (const id of removed) {
+        this.refreshService.cancelSource(id); this.feedErrors.delete(id);
+        await this.cache.deleteSource(id);
+      }
+    });
+    this.reconcileTail = operation.catch(error => this.notice(error));
+    await operation;
+    if (!this.stopped && added.length && this.app.workspace.getLeavesOfType(READER_VIEW).length) await this.refreshFeeds(added);
+  }
+  private async refreshFeeds(sources: readonly FeedSource[]): Promise<void> {
+    await this.reconcileTail;
+    if (this.stopped) return;
+    const currentSources = sources.filter(source => this.knownSources.has(source.id));
+    const results = await this.refreshService.refreshSources(currentSources);
+    if (this.stopped) return;
+    for (const result of results) {
+      if (!this.knownSources.has(result.feedId)) continue;
+      if (result.ok) this.feedErrors.delete(result.feedId); else this.feedErrors.set(result.feedId, result.error.message);
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType(SOURCES_VIEW)) (leaf.view as SourcesView).refresh();
+    await Promise.all(this.app.workspace.getLeavesOfType(READER_VIEW).map(leaf => (leaf.view as ReaderView).refresh()));
+  }
+  private notice(error: unknown): void { if (!this.stopped) new Notice(error instanceof Error ? error.message : String(error)); }
+  private async report(operation: () => Promise<void>): Promise<void> { try { if (!this.stopped) await operation(); } catch (error) { this.notice(error); } }
+}

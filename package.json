@@ -1,0 +1,31 @@
+{
+  "name": "obsidian-feed-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop RSS/Atom reader for Obsidian",
+  "scripts": {
+    "dev": "node esbuild.config.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && node esbuild.config.mjs",
+    "test": "vitest run",
+    "test:scale": "VFR_RUN_SCALE=1 vitest run tests/acceptance/scale.test.ts --testTimeout=240000"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^22.0.0",
+    "@types/turndown": "^5.0.6",
+    "esbuild": "^0.28.2",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.1.1",
+    "obsidian": "^1.8.7",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.11"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.15",
+    "fast-xml-parser": "^5.11.1",
+    "smol-toml": "^1.8.0",
+    "turndown": "^7.2.4",
+    "yaml": "^2.9.1"
+  }
+}

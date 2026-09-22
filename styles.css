@@ -1,0 +1,100 @@
+.vfr-reader {
+  display: grid;
+  grid-template-columns: minmax(220px, 32%) minmax(0, 1fr);
+  height: 100%;
+}
+.vfr-list, .vfr-content { padding: 16px; overflow: auto; }
+.vfr-list { border-right: 1px solid var(--background-modifier-border); }
+.vfr-sources { padding: 12px; overflow: auto; }
+.vfr-source-actions, .vfr-list-actions, .vfr-page-controls { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.vfr-folder { display: grid; gap: 4px; margin: 12px 0; }
+.vfr-source-button { text-align: left; }
+.vfr-search { width: 100%; box-sizing: border-box; }
+.vfr-rows { display: grid; gap: 3px; }
+.vfr-article-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; text-align: left; }
+.vfr-article-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vfr-article-date { color: var(--text-muted); font-size: var(--font-smallest); }
+.vfr-article-row.is-unread .vfr-article-title { font-weight: var(--font-bold); }
+.vfr-article-row.is-selected { outline: 2px solid var(--interactive-accent); }
+.vfr-error { color: var(--text-error); }
+.vfr-article-body { overflow-wrap: anywhere; }
+.vfr-article-body img { max-width: 100%; height: auto; }
+@media (max-width: 650px) {
+  .vfr-reader { grid-template-columns: 1fr; height: auto; }
+  .vfr-list { border-right: 0; border-bottom: 1px solid var(--background-modifier-border); }
+}
+
+/* Obsidian supplies the palette, typography and navigation states. */
+.workspace-leaf-content[data-type="vault-feed-reader-sources"] .view-content { padding: 0; }
+.vfr-sources { padding: var(--size-4-2); font-family: var(--font-interface); color: var(--text-normal); }
+.vfr-sidebar-header { display: flex; align-items: center; gap: var(--size-4-2); padding: var(--size-4-3) var(--size-4-2); margin-bottom: var(--size-4-3); }
+.vfr-sidebar-title { font-weight: var(--font-semibold); }
+.vfr-navigation, .vfr-sidebar-tools { display: grid; gap: var(--size-2-1); }
+.vfr-sidebar-tools { margin-top: var(--size-4-4); }
+.vfr-section-label { margin: var(--size-4-6) var(--size-4-2) var(--size-4-2); color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.vfr-sources .vfr-nav-row { display: flex; align-items: center; gap: var(--size-4-2); width: 100%; min-width: 0; min-height: 32px; height: auto; margin: 0; padding: var(--size-4-2); border: 0; border-radius: var(--radius-s); box-shadow: none; background: transparent; color: var(--nav-item-color); font: inherit; font-size: var(--nav-item-size); text-align: left; }
+.vfr-sources .vfr-nav-row:hover { background: var(--nav-item-background-hover); color: var(--nav-item-color-hover); }
+.vfr-sources .vfr-nav-row.is-active { background: var(--nav-item-background-active); color: var(--nav-item-color-active); font-weight: var(--nav-item-weight-active); }
+.vfr-nav-row:focus-visible, .vfr-folder-toggle:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
+.vfr-nav-icon { display: inline-flex; flex: 0 0 18px; color: var(--text-muted); }
+.vfr-nav-icon svg { width: 16px; height: 16px; }
+.vfr-nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vfr-unread-count { margin-left: auto; color: var(--text-faint); font-size: var(--font-ui-smaller); font-variant-numeric: tabular-nums; }
+.vfr-folder { display: block; margin: var(--size-2-1) 0; }
+.vfr-folder-heading { display: flex; align-items: center; }
+.vfr-folder-heading .vfr-nav-row { flex: 1; }
+.vfr-sources .vfr-folder-toggle { flex: 0 0 24px; padding: var(--size-2-2); height: 28px; background: transparent; box-shadow: none; border: 0; color: var(--text-faint); }
+.vfr-folder-toggle svg { width: 14px; height: 14px; }
+.vfr-folder-children { padding-left: var(--size-4-6); }
+.vfr-empty-sources { padding: var(--size-4-2); color: var(--text-muted); font-size: var(--font-ui-small); }
+.vfr-article-body { font-family: var(--font-text); font-size: var(--font-text-size); line-height: var(--line-height-normal); color: var(--text-normal); }
+.vfr-article-body pre { overflow-x: auto; }
+.vfr-article-body table { display: block; max-width: 100%; overflow-x: auto; }
+.vfr-article-body img, .vfr-article-body video { max-width: 100%; height: auto; }
+.vfr-filter-actions { display: flex; flex-wrap: wrap; gap: var(--size-2-2); margin-bottom: var(--size-4-2); }
+
+/* List → article navigation uses one full-width surface inside the reader leaf. */
+.vfr-reader { display: block; height: 100%; min-height: 0; }
+.vfr-reader > [hidden] { display: none; }
+.vfr-list, .vfr-content { height: 100%; box-sizing: border-box; border: 0; padding: var(--size-4-6); }
+.vfr-list { max-width: 1100px; margin: 0 auto; }
+.vfr-list-heading h1 { margin: var(--size-4-4) 0 var(--size-4-2); }
+.vfr-list-description, .vfr-article-meta { color: var(--text-muted); font-size: var(--font-ui-small); }
+.vfr-search { max-width: 360px; margin: var(--size-4-2) 0; }
+.vfr-batch-menu { margin: var(--size-4-3) 0 var(--size-4-6); color: var(--text-muted); font-size: var(--font-ui-small); }
+.vfr-batch-menu summary { cursor: pointer; }
+.vfr-list-actions small { flex-basis: 100%; }
+.vfr-rows { display: block; }
+.vfr-reader .vfr-article-row { display: grid; grid-template-columns: minmax(80px, 18%) minmax(0, 1fr) auto; align-items: baseline; gap: var(--size-4-4); width: 100%; height: auto; min-height: 56px; padding: var(--size-4-4) var(--size-4-2); border: 0; border-bottom: 1px solid var(--background-modifier-border); border-radius: 0; box-shadow: none; background: transparent; color: var(--text-muted); }
+.vfr-reader .vfr-article-row:hover, .vfr-reader .vfr-article-row.is-selected { background: var(--background-modifier-hover); }
+.vfr-article-row.is-unread { color: var(--text-normal); }
+.vfr-article-source { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-ui-small); }
+.vfr-filter-actions button[aria-pressed="true"] { background: var(--background-modifier-hover); color: var(--text-accent); }
+.vfr-content { padding-top: 0; }
+.vfr-article-navigation { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--size-4-2); padding: var(--size-4-3) 0; background: var(--background-primary); border-bottom: 1px solid var(--background-modifier-border); }
+.vfr-navigation-scope { flex: 1; min-width: 60px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vfr-reading-column { max-width: var(--file-line-width, 700px); margin: var(--size-4-8) auto; }
+.vfr-reading-column h1 { font-family: var(--font-text); line-height: var(--line-height-tight); overflow-wrap: anywhere; }
+.vfr-article-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--size-4-3); margin: var(--size-4-5) 0 var(--size-4-8); }
+@media (max-width: 650px) {
+  .vfr-list, .vfr-content { padding-left: var(--size-4-3); padding-right: var(--size-4-3); }
+  .vfr-reader .vfr-article-row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--size-4-2); }
+  .vfr-article-source { grid-column: 1 / -1; }
+}
+
+.vfr-manager { padding: var(--size-4-8); overflow-y: auto; }
+.vfr-manager > h2 { margin-top: var(--size-4-4); }
+.vfr-manager-tabs, .vfr-manager-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: var(--size-4-2); margin: var(--size-4-4) 0; }
+.vfr-manager-tabs button[aria-pressed="true"] { color: var(--text-accent); background: var(--background-modifier-hover); }
+.vfr-manager-search { width: min(100%, 480px); }
+.vfr-manager-pagination span { flex: 1; color: var(--text-muted); font-size: var(--font-ui-small); }
+.vfr-managed-source { border-bottom: 1px solid var(--background-modifier-border); }
+.vfr-manager .setting-item { gap: var(--size-4-4); flex-wrap: wrap; }
+.vfr-manager .setting-item-info { min-width: 180px; flex: 1; }
+.vfr-manager .setting-item-description { overflow-wrap: anywhere; }
+.vfr-manager .setting-item-control { flex-wrap: wrap; }
+.vfr-manager textarea { min-height: 40vh; font-family: var(--font-monospace); }
+
+.vfr-template-settings textarea { width: min(100%, 36rem); font-family: var(--font-monospace); }
+.vfr-template-settings .setting-item-control { flex-wrap: wrap; }
+.vfr-template-preview { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; padding: var(--size-4-3); background: var(--background-secondary); user-select: text; }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:base="https://example.net/root/">
+  <title>Example Atom</title>
+  <entry>
+    <id>tag:example.net,2026:one</id>
+    <title>Atom entry</title>
+    <link rel="alternate" href="../articles/one" />
+    <updated>2026-09-20T12:00:00+08:00</updated>
+    <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Atom body</p></div></content>
+  </entry>
+  <entry>
+    <id>tag:example.net,2026:two</id>
+    <title>Missing date and body</title>
+    <link href="two" />
+  </entry>
+</feed>

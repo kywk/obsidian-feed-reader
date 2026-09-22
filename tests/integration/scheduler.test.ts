@@ -1,0 +1,53 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { ReaderScheduler } from '../../src/scheduler';
+afterEach(() => vi.useRealTimers());
+it('refreshes only while a reader exists and cleans up on unload', async () => {
+  vi.useFakeTimers();
+  const refresh = vi.fn(async () => {});
+  const scheduler = new ReaderScheduler(refresh, 1000);
+  scheduler.setPresent(true);
+  scheduler.setPresent(true);
+  await vi.advanceTimersByTimeAsync(2100);
+  expect(refresh).toHaveBeenCalledTimes(3);
+  scheduler.setPresent(false);
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(refresh).toHaveBeenCalledTimes(3);
+  scheduler.setPresent(true);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(refresh).toHaveBeenCalledTimes(4);
+  scheduler.dispose();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(refresh).toHaveBeenCalledTimes(4);
+});
+it('coalesces overdue wakeups while a refresh is pending', async () => {
+  vi.useFakeTimers();
+  let finish!: () => void;
+  const refresh = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+  const scheduler = new ReaderScheduler(refresh, 1000);
+  scheduler.setPresent(true);
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(refresh).toHaveBeenCalledTimes(1);
+  finish();
+  await Promise.resolve();
+  scheduler.dispose();
+});
+it('reports errors without creating an unhandled timer rejection', async () => {
+  vi.useFakeTimers();
+  const failed = new Error('offline');
+  const report = vi.fn();
+  const scheduler = new ReaderScheduler(async () => { throw failed; }, 1000, report);
+  scheduler.setPresent(true);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(report).toHaveBeenCalledWith(failed);
+  scheduler.dispose();
+});
+it('suppresses late error notices after unload', async () => {
+  let fail!: (error: Error) => void;
+  const report = vi.fn();
+  const scheduler = new ReaderScheduler(() => new Promise<void>((_, reject) => { fail = reject; }), 1000, report);
+  const run = scheduler.run();
+  scheduler.dispose();
+  fail(new Error('late'));
+  await run;
+  expect(report).not.toHaveBeenCalled();
+});
