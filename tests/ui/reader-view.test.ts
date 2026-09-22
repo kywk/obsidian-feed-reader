@@ -372,3 +372,23 @@ it('copies the original URL and Markdown link from article actions', async () =>
     await vi.waitFor(() => expect(markdown.disabled).toBe(false));
   } finally { await view.onClose(); }
 });
+
+it('keeps the article title in navigation and shows back-to-top only after scrolling', async () => {
+  const { view, root } = setup();
+  await view.onOpen();
+  const top = root.querySelector<HTMLButtonElement>('.vfr-back-to-top')!;
+  expect(top.hidden).toBe(true);
+  root.querySelector<HTMLButtonElement>('.vfr-article-row')!.click();
+  await vi.waitFor(() => expect(root.querySelector('.vfr-navigation-title')?.textContent).toBe('Needle article'));
+  const content = root.querySelector<HTMLElement>('.vfr-content')!;
+  content.scrollTop = 500; content.dispatchEvent(new Event('scroll'));
+  expect(top.hidden).toBe(false);
+  top.click();
+  expect(content.scrollTop).toBe(0);
+  expect(top.hidden).toBe(true);
+  content.scrollTop = 500; content.dispatchEvent(new Event('scroll'));
+  root.querySelector<HTMLButtonElement>('[aria-label="Back to list (Escape)"]')!.click();
+  expect(top.hidden).toBe(true);
+  await view.onClose();
+  expect(root.querySelector('.vfr-back-to-top')).toBeNull();
+});

@@ -9,6 +9,7 @@ vi.mock('obsidian', () => ({
     constructor(leaf: { contentEl: HTMLElement }) { this.contentEl = leaf.contentEl; }
   },
   Notice: class {},
+  setIcon: () => {},
   WorkspaceLeaf: class {},
 }));
 

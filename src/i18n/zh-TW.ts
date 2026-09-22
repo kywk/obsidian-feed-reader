@@ -228,5 +228,6 @@ export const zhTW = {
   "URL": "網址",
   "Markdown": "Markdown",
   "Save": "保存",
-  "Read / unread": "已讀／未讀"
+  "Read / unread": "已讀／未讀",
+  "Back to top": "回到頁首"
 } as const;

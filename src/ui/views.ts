@@ -205,6 +205,10 @@ export class ReaderView extends ItemView {
   private root?: HTMLElement;
   private listEl?: HTMLElement;
   private articleEl?: HTMLElement;
+  private backToTop?: HTMLButtonElement;
+  private readonly updateBackToTop = (): void => {
+    if (this.backToTop) this.backToTop.hidden = !this.openedKey || !this.articleEl || this.articleEl.hidden || this.articleEl.scrollTop < 240;
+  };
   private search?: HTMLInputElement;
   private readerScope: ReaderScope;
   private summaries: ArticleSummary[] = [];
@@ -239,6 +243,15 @@ export class ReaderView extends ItemView {
     this.root = this.contentEl.createDiv({ cls: 'vfr-reader', attr: { tabindex: '0', 'aria-label': t("RSS reader") } });
     this.listEl = this.root.createDiv({ cls: 'vfr-list' });
     this.articleEl = this.root.createDiv({ cls: 'vfr-content' });
+    this.backToTop = this.root.createEl('button', { cls: 'vfr-back-to-top clickable-icon', attr: { title: t('Back to top'), 'aria-label': t('Back to top') } });
+    this.backToTop.hidden = true;
+    setIcon(this.backToTop, 'arrow-up');
+    this.backToTop.addEventListener('click', () => {
+      if (this.articleEl) this.articleEl.scrollTop = 0;
+      this.updateBackToTop();
+      this.root?.focus();
+    });
+    this.articleEl.addEventListener('scroll', this.updateBackToTop, { passive: true });
     this.root.addEventListener('keydown', event => void this.onKeyDown(event).catch(error => this.showError(error)));
     this.root.addEventListener('compositionstart', () => { this.composing = true; });
     this.root.addEventListener('compositionend', () => { this.composing = false; });
@@ -256,6 +269,8 @@ export class ReaderView extends ItemView {
   async onClose(): Promise<void> {
     this.closed = true;
     ++this.loadGeneration; this.openedKey = undefined;
+    this.articleEl?.removeEventListener('scroll', this.updateBackToTop);
+    this.backToTop?.remove(); this.backToTop = undefined;
     this.root = undefined; this.listEl = undefined; this.articleEl = undefined;
     this.unsubscribeScope?.(); this.unsubscribeBatch?.(); this.unsubscribeStates?.(); this.unsubscribeSubscriptions?.();
   }
@@ -402,6 +417,7 @@ export class ReaderView extends ItemView {
   }
   private showList(focus = true): void {
     this.openedKey = undefined;
+    this.updateBackToTop();
     if (this.listEl) { this.listEl.hidden = false; this.listEl.scrollTop = this.listScroll; }
     if (this.articleEl) this.articleEl.hidden = true;
     if (focus) (this.listEl?.querySelector<HTMLElement>('.is-selected') ?? this.root)?.focus();
@@ -410,6 +426,7 @@ export class ReaderView extends ItemView {
     if (this.listEl && !this.listEl.hidden) this.listScroll = this.listEl.scrollTop;
     if (this.listEl) this.listEl.hidden = true;
     if (this.articleEl) { this.articleEl.hidden = false; this.articleEl.scrollTop = 0; }
+    this.updateBackToTop();
     this.root?.focus();
   }
   private async changePage(direction: number): Promise<void> {
@@ -480,7 +497,7 @@ export class ReaderView extends ItemView {
   }
   private renderArticle(article: Article): void {
     const container = this.articleEl; if (!container) return;
-    container.empty(); this.articleNavigation(container);
+    container.empty(); this.articleNavigation(container, article.title || t("Untitled article"));
     const reading = container.createDiv({ cls: 'vfr-reading-column' });
     reading.createEl('p', { cls: 'vfr-article-meta', text: `${this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === article.feedId)?.title ?? ''} · ${formatDate(article)}` });
     reading.createEl('h1', { text: article.title || t("Untitled article") });
@@ -520,15 +537,18 @@ export class ReaderView extends ItemView {
     }
     if (!body.textContent?.trim() && !body.children.length) body.createEl('p', { text: t("This source did not provide article content.") });
   }
-  private articleNavigation(container: HTMLElement): void {
+  private articleNavigation(container: HTMLElement, title = this.selected()?.title || t("Untitled article")): void {
     const nav = container.createDiv({ cls: 'vfr-article-navigation' });
-    const back = nav.createEl('button', { text: t("Back to list"), attr: { 'aria-label': t("Back to list (Escape)") } });
+    const leading = nav.createDiv({ cls: 'vfr-navigation-leading' });
+    const back = leading.createEl('button', { text: t("Back to list"), attr: { 'aria-label': t("Back to list (Escape)") } });
     back.addEventListener('click', () => this.showList());
-    nav.createSpan({ cls: 'vfr-navigation-scope', text: this.scopeLabel() });
-    const previous = nav.createEl('button', { text: t("Previous"), attr: { 'aria-label': t("Previous article (k)") } });
+    leading.createSpan({ cls: 'vfr-navigation-scope', text: this.scopeLabel() });
+    nav.createSpan({ cls: 'vfr-navigation-title', text: title, attr: { title } });
+    const trailing = nav.createDiv({ cls: 'vfr-navigation-trailing' });
+    const previous = trailing.createEl('button', { text: t("Previous"), attr: { 'aria-label': t("Previous article (k)") } });
     previous.disabled = this.selectedIndex <= 0 && !this.pageHistory.length;
     previous.addEventListener('click', () => void this.move(-1).catch(error => this.showError(error)));
-    const next = nav.createEl('button', { text: t("Next"), attr: { 'aria-label': t("Next article (j)") } });
+    const next = trailing.createEl('button', { text: t("Next"), attr: { 'aria-label': t("Next article (j)") } });
     next.disabled = this.selectedIndex >= this.summaries.length - 1 && !this.nextCursor;
     next.addEventListener('click', () => void this.move(1).catch(error => this.showError(error)));
   }
