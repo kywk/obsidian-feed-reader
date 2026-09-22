@@ -1,104 +1,108 @@
 # Vault Feed Reader
 
-Obsidian 桌面版 RSS／Atom reader。訂閱、閱讀狀態與保存筆記留在 vault；文章內容快取存在本機 IndexedDB。
+[繁體中文](README.zh-TW.md)
 
-## 目前狀態
+A desktop RSS and Atom reader for Obsidian, built for browsing many feeds and saving selected articles as Markdown. Subscriptions, reading state, and saved notes live in your vault; article content is cached locally in IndexedDB.
 
-MVP 與 OPML 匯入／匯出已實作；OPML 完整工作區 build 與 90 個一般測試通過，1 個 opt-in scale 略過。OPML 尚未做 Obsidian 實機或真實匯出檔互通驗證，詳見 [OPML validation](docs/opml-validation.md)。先前 MVP 實機流程與 2 個模擬規模測試見 [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md)，未驗證項不視為通過。
+## Status and requirements
 
-開發前閱讀 [AGENTS.md](AGENTS.md)；提交與驗收規範由該檔按需導引。歷次成果與提交脈絡見 [進展索引](docs/progress.md)。
+The MVP and OPML import/export are implemented. The recorded OPML validation passed the build and 90 regular tests, with one opt-in scale test skipped. OPML has not yet been tested in Obsidian or against real exports from other readers. See [OPML validation](docs/opml-validation.md) and the earlier [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md) for the scope and limitations of previous checks.
 
-## 開發與本機安裝
+- Desktop Obsidian only; declared minimum version: **1.8.7**. This does not mean every desktop version has been tested.
+- No Feedly or other service account is required. Only public HTTP(S) feeds are supported.
+- Not yet published in the Community Plugins directory.
 
-使用 Node.js 22：
+## Installation and development
+
+Use Node.js 22:
 
 ```sh
 npm ci
 npm run build
 npm test
-# 選用：100k 摘要規模測試（耗時約數分鐘）
+# Optional: 100k article metadata scale test; takes several minutes
 npm run test:scale
-# 持續編譯
+# Watch mode
 npm run dev
 ```
 
-將 `main.js`、`manifest.json`、`styles.css` 複製到測試 vault 的 `.obsidian/plugins/vault-feed-reader/`，在 Settings → Community plugins 啟用 **Vault Feed Reader**。更新檔案後停用再啟用插件。尚未發佈到插件市集。
+Copy `main.js`, `manifest.json`, and `styles.css` into `.obsidian/plugins/vault-feed-reader/` in a test vault. Enable **Vault Feed Reader** under Settings → Community plugins. Disable and re-enable the plugin after replacing its files.
 
-## 閱讀流程
+For release preparation, see the [publishing checklist](docs/releasing.md). Contributors should start with [AGENTS.md](AGENTS.md); the behavior contract is in [SPEC.md](SPEC.md), and recorded development progress is indexed in [docs/progress.md](docs/progress.md).
 
-1. 按 ribbon 的 RSS 圖示，或執行 **Open RSS reader**，開啟來源側欄與主區域 reader。
-2. 在 **Manage sources** 新增公開 HTTP(S) RSS／Atom URL，設定來源名稱及單層資料夾。每個來源可屬於多個資料夾。
-3. reader 分頁關閉後，點左側來源會自動重開；已存在則切回同一分頁。點左側來源後，右側先顯示該來源的全寬文章列表；點文章進入全文，開啟內容即標為已讀。可切換全部、未讀、已讀、今日或已保存，並依來源／資料夾與標題篩選。
-4. 按 `s` 保存 RSS 正文或摘要為 Markdown；已保存過則開啟原筆記，不覆寫人工編輯。已保存清單不依賴文章快取仍存在。
+## Reading feeds
 
-全文上方提供 **Back to list**、**Previous**、**Next**；`Esc` 返回列表並保留選取位置。搜尋、篩選和 **Reading actions** 批次操作留在列表畫面。
+1. Click the RSS ribbon icon or run **Open RSS reader** to open the source sidebar and reader.
+2. Open **Manage sources** to add a public RSS/Atom URL, a display name, and folders. One source can belong to multiple folders.
+3. Select a source to show its full-width article list. Select an article to read it and mark it as read. Filters include all, unread, read, today, and saved; you can also filter by source/folder and search titles. Selecting a source reopens a closed reader or reuses an existing one.
+4. Press `s` to save the feed-provided article body or summary as Markdown. Saving an already saved article opens its existing note without overwriting manual edits. The saved list does not depend on the article remaining in the cache.
 
-列表每頁最多 50 筆，全文按需讀取；`j/k` 可跨頁前進及返回。每來源保留最新 500 篇；快取淘汰不刪閱讀狀態或筆記。未讀列表中的剛讀文章會保留到重新套用篩選或切換來源。
+The article view provides **Back to list**, **Previous**, and **Next**. Press `Esc` to return to the list with the selection preserved. Search, filters, and bulk **Reading actions** are available in the list view.
 
-| 快捷鍵 | 動作 |
+Lists show up to 50 articles per page and load full content on demand. Navigation with `j/k` crosses page boundaries. The cache retains the latest 500 articles per source; eviction does not delete reading state or saved notes. An article just marked as read stays in the unread list until you reapply filters or change sources.
+
+| Shortcut | Action |
 |---|---|
-| `j` / `k` | 下一篇／上一篇；正文已開啟時同步切文 |
-| `Enter` | 開啟選取文章 |
-| `o` | 在外部瀏覽器開 HTTP(S) 原文 |
-| `m` | 切換已讀／未讀 |
-| `s` | 保存／開啟既有筆記 |
-| `Esc` | 返回列表 |
+| `j` / `k` | Next / previous article; also changes the article when its content is open |
+| `Enter` | Open the selected article |
+| `o` | Open the HTTP(S) original in your external browser |
+| `m` | Toggle read / unread |
+| `s` | Save or open the existing saved note |
+| `Esc` | Return to the list |
 
-快捷鍵僅在 reader 有焦點且不在輸入欄或 IME 組字時生效。設定 **Mark read on j/k navigation** 預設關閉。
+Shortcuts work only when the reader has focus and you are not typing in an input or composing with an IME. **Mark read on j/k navigation** is off by default.
 
-## 訂閱與閱讀狀態
+## Subscriptions and reading state
 
-YAML 是唯一訂閱權威來源。UI 修改回寫 YAML；支援 YAML／TOML／OPML 匯入與匯出，匯入預設合併，取代需確認。合併依 URL 去重並保留既有分類與來源 ID；不同 query 不會合併。
+Vault YAML is the authoritative subscription source. UI changes write back to YAML. YAML, TOML, and OPML import/export are supported. Import defaults to merging; replacing subscriptions requires confirmation. Merge deduplicates by URL while preserving existing folders and source IDs. URLs with different query strings remain distinct.
 
-外部修改 YAML 會自動載入。檔案損壞時顯示錯誤、沿用最後有效清單並停止 UI 回寫，修正後恢復。來源 URL 是身分的一部分；需要換 URL 時請新增來源，名稱與分類可以直接編輯。
+External YAML edits reload automatically. If the file is invalid, the plugin reports the error, retains the last valid list, and stops UI writes until the file is repaired. A source URL is part of its identity: add a new source to change the URL; names and folder assignments can be edited directly.
 
-從資料夾移除只解除關聯；取消訂閱才全域移除來源與本機快取。刪除資料夾保留來源，未歸類來源顯示於 Unfiled。重新訂閱同一 URL 會沿用原 ID 與已讀紀錄。
+Removing a source from a folder only removes that association. Unsubscribing removes the source globally and clears its local cache. Deleting a folder keeps its sources; sources without folders appear under **Unfiled**. Resubscribing to the same URL preserves its original ID and reading history.
 
-批次已讀針對目前來源、資料夾或全域，與標題搜尋無關。日期以前操作使用本地日期起點，嚴格早於該時間才算已讀；手動標未讀會覆蓋 cutoff，直到再次明確標已讀。
+Bulk read actions apply to the current source, folder, or all sources, independently of title search. Date-based actions use local midnight and affect articles strictly before that cutoff. Manually marking an article unread overrides the cutoff until it is explicitly marked read again.
 
-| 資料 | 預設位置 |
+| Data | Default location |
 |---|---|
-| 訂閱 YAML | `Feed Reader/feeds.yaml`，可設定 |
-| 每來源已讀 JSON | `Feed Reader/state/<feedId>.json` |
-| URL／來源 ID 對照 | `Feed Reader/state/source-ids.json`，保留重新訂閱身分 |
-| 保存筆記 | `Feed Reader/Articles/`，可設定 |
-| 文章 metadata／正文 | 本機 IndexedDB，依 vault 路徑與來源分區 |
+| Subscription YAML | `Feed Reader/feeds.yaml` (configurable) |
+| Per-source reading state | `Feed Reader/state/<feedId>.json` |
+| URL-to-ID mapping | `Feed Reader/state/source-ids.json`; preserves identity on resubscription |
+| Saved notes | `Feed Reader/Articles/` (configurable) |
+| Article metadata and content | Local IndexedDB, partitioned by vault path and source |
 
-備份時保留 vault 中的訂閱、state 與筆記。IndexedDB 可重新抓取重建，不作為歷史文章封存。插件不處理跨裝置衝突合併。
+Back up your vault subscriptions, state, and notes. IndexedDB is a disposable cache that can be rebuilt from available feeds, not a historical archive or cross-device sync source. The plugin does not merge cross-device conflicts.
 
-## 更新與內容
+## Refreshing and content
 
-開啟 reader 時更新；只要任一 reader 分頁仍存在，每 30 分鐘更新一次，切到筆記也會繼續。最後一個 reader 關閉後停止排程，休眠過期只補一輪。可手動更新；單一來源失敗保留其既有文章並顯示錯誤。
+Opening the reader triggers a refresh. While any reader tab exists, feeds refresh every 30 minutes, even when you switch to a note. Closing the last reader stops the schedule. After sleep, an overdue schedule triggers one catch-up refresh. Manual refresh is available; a failed source retains its cached articles and displays an error.
 
-僅使用 feed 自帶正文／摘要，不擷取原文網頁、不登入 Feedly 或其他帳號、不下載附件。渲染與保存共用 DOMPurify／HTTP(S) URL 規則；相對連結以來源 URL 解析。圖片保留遠端 URL，離線可讀已保存文字，圖片不保證可用。
+Only feed-provided content or summaries are used. The plugin does not scrape original article pages, sign in to Feedly or other services, or download attachments. Rendering and saving share DOMPurify sanitization and HTTP(S) URL rules. Remote images remain URLs: saved text is available offline, but images may not be.
 
-## 規格與驗證
+## Privacy and network access
 
-- [SPEC](SPEC.md)：需求與 S7 驗收條件。
-- [實作計畫](docs/history/2026-09-22-rss-reader-mvp/implementation-plan.md)：T1–T6 分工與 ownership。
-- [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md)：測試、規模量測、Obsidian smoke 與限制。
+- Refreshing sends requests directly to the public RSS/Atom URLs you subscribe to, including destinations reached through redirects, to retrieve articles.
+- Displaying article images can contact the image hosts specified by the feed, including third-party hosts. Saved notes retain these remote URLs and may load them when viewed in Obsidian. Those hosts receive ordinary network requests, including your IP address.
+- Opening the original article launches its URL in your external browser.
+- The plugin has no analytics, telemetry, advertisements, paid features, or developer-operated backend. It does not upload your notes or reading state to a plugin service.
+- Persistent subscriptions, state, and saved notes stay in the vault; plugin settings use Obsidian's plugin data storage. Article cache uses local IndexedDB. The plugin does not directly read or write arbitrary files outside the vault. Importing a file uses a user-selected file; exporting a download uses the browser download mechanism.
 
-最低版本宣告為 Obsidian 1.8.7；實際驗證版本另見驗收記錄，不代表所有桌面版本均已測試。
+## Sidebar, themes, and large subscription lists
 
-## 側欄與 Obsidian themes
+The sidebar groups common filters, source actions, **Feeds**, and **Unfiled**. Folder arrows collapse groups; folder names select their scope. Counts show unread cached articles, and **All articles** counts shared sources once. Collapse state lasts until the view closes.
 
-側欄參考 Feedly 的直列導覽：常用篩選、來源操作、Feeds 與 Unfiled 分區；資料夾箭頭可收合，名稱可選取範圍。右側數字為快取文章的未讀數，共用來源在 All articles 只計算一次。收合狀態保留至 view 關閉。
+The UI uses Obsidian buttons, icons, navigation colors, and font variables. Article content uses `markdown-rendered` and reading fonts. Feed HTML inline styles, classes, and legacy color/font attributes are removed to avoid overriding your theme. Default theme light/dark switching was tested previously; third-party themes have not been individually verified. The newer sidebar counting path has not been measured with 100k articles in native Obsidian.
 
-介面沿用 Obsidian 原生按鈕、圖示、導航色彩與字型變數；全文套用 `markdown-rendered` 與閱讀字型。來源 HTML 的 inline style、class 與舊式字色／字型屬性會移除，避免覆蓋主題。已實測 Default theme 明暗切換，並還原跟隨系統設定；第三方 themes 尚未逐一驗證。側欄未讀統計的新路徑尚未在原生 100k 資料下量測。
+**Manage sources** opens a dedicated tab and reuses it on subsequent opens. The list shows 50 sources per page and searches all subscriptions by name, URL, or folder without rebuilding the search field as you type. **Sources** and **Folders** have separate views. Editing, categorization, and import/export happen in this tab. Uncheck a folder in **Edit / folders** to remove only that association.
 
-## 管理大量訂閱
+## Saved note templates
 
-**Manage sources** 會在主區域開啟獨立分頁，重複點擊復用同一頁。來源列表每頁 50 筆，可依名稱、URL 或資料夾搜尋全部訂閱；搜尋欄不會因輸入而重建。**Sources** 與 **Folders** 分開切換，編輯來源、分類及匯入匯出也在管理分頁內進行。解除資料夾關聯可在 **Edit / folders** 取消勾選。
+Under Settings → Vault Feed Reader → **Saved note templates**, configure:
 
-## 保存筆記模板
+- **Filename template**: omit `.md`; defaults to `{{date}} {{title}}`. Invalid filename characters are removed; collisions receive a unique suffix.
+- **Body template**: Markdown content, defaulting to the title and article. Add your own notes, summaries, or task sections.
+- **Custom Properties**: a YAML mapping without `---`. Supports strings, numbers, booleans, null, and lists of those values. Quote values containing variables; the serializer handles YAML escaping after substitution.
 
-Settings → Vault Feed Reader → **Saved note templates** 可設定：
-
-- **Filename template**：不含 `.md`，預設 `{{date}} {{title}}`；移除不合法檔名字元，重名時自動加識別碼。
-- **Body template**：Markdown 內文，預設為標題與文章內容；可加入心得、摘要整理或待辦區域。
-- **Custom Properties**：不含 `---` 的 YAML mapping，支援文字、數字、布林、null 及上述值的列表。含變數的值請加引號，資料代入後由 serializer 處理 YAML escaping。
-
-例如 Properties：
+Example properties:
 
 ```yaml
 tags:
@@ -107,36 +111,43 @@ status: inbox
 source: "{{feed}}"
 ```
 
-例如內文：
+Example body:
 
 ```markdown
 # {{title}}
 
-## 我的筆記
+## My notes
 
-## 文章內容
+## Article
 
 {{content}}
 ```
 
-支援 `{{title}}`、`{{feed}}`、`{{link}}`、`{{published}}`、`{{created}}`、`{{date}}`；`{{content}}` 僅供內文，內容仍為 RSS 提供的正文／摘要。作者、獨立摘要與資料夾變數尚未支援。普通文字在內文會進行 Markdown escaping，正文則保留 HTML 清理後轉出的 Markdown；變數不會遞迴展開或執行程式。
+Available variables: `{{title}}`, `{{feed}}`, `{{link}}`, `{{published}}`, `{{created}}`, and `{{date}}`; `{{content}}` is available only in the body and contains the feed-provided content/summary. Author, separate summary, and folder variables are not supported. Text values are Markdown-escaped in the body; content is sanitized HTML converted to Markdown. Variables do not expand recursively or execute code.
 
-`published`、`created` 預設為 ISO 時間，日期格式可用 `YYYY-MM-DD`、`YYYY-MM-DD HH:mm`、`YYYY-MM-DD HH:mm:ss`、`YYYY-MM-DDTHH:mm:ss`，例如 `{{created:YYYY-MM-DD}}`，均使用 UTC。缺少發佈時間時 `published` 為空；`date` 則依發佈時間、首次抓取、保存時間順序選擇日期。
+`published` and `created` default to ISO timestamps. Supported date formats are `YYYY-MM-DD`, `YYYY-MM-DD HH:mm`, `YYYY-MM-DD HH:mm:ss`, and `YYYY-MM-DDTHH:mm:ss`, for example `{{created:YYYY-MM-DD}}`; all use UTC. Missing publication dates yield an empty `published`. The `date` fallback order is publication time, first fetch time, then save time.
 
-設定頁即時預覽範例文章的檔名與 Markdown 原始碼；未知變數、錯誤 YAML 或保留欄位會顯示錯誤並停用 Apply。按 **Apply templates** 才保存設定；**Load defaults** 只重設草稿，仍須 Apply。`title` 與 `feed_reader_*` 由系統維護，不能由自訂 Properties 覆蓋。
+The settings page previews the filename and Markdown source. Unknown variables, invalid YAML, and reserved properties show errors and disable **Apply**. **Apply templates** saves changes; **Load defaults** only resets the draft and still requires Apply. `title` and `feed_reader_*` are managed by the plugin and cannot be overridden.
 
-模板只影響新建筆記。已保存的文章仍開啟原筆記，不重新套版、不覆寫心得；修改模板也不會批次改寫歷史筆記。原有使用者未設定模板時沿用預設格式。
+Templates affect only new notes. Existing saved notes open unchanged; editing templates does not rewrite historical notes or personal annotations. Users without custom templates keep the default format.
 
+## Moving subscriptions with OPML
 
-## OPML 訂閱搬移
+In **Manage sources → Import / export**, select **OPML**, paste text or select an `.opml`/`.xml` file, then click Import. Selecting a file does not change the format automatically. Import defaults to Merge; **Replace all subscriptions** requires confirmation. **Generate export** produces text to copy; **Download** saves `feeds.opml`.
 
-在 **Manage sources → Import / export** 將 Format 選為 **OPML**，貼上內容或選擇 `.opml`／`.xml` 檔案，再按 Import。選檔不會自動切换格式，請先確認 Format。匯入預設 Merge；Replace all subscriptions 仍須確認。Generate export 可複製 OPML 文字，Download 下載 `feeds.opml`。
+- Imports OPML 1.0, 1.1, and 2.0; exports OPML 2.0. YAML remains authoritative.
+- Nested categories flatten to `Parent / Child`; parent and empty folders are retained. Export uses one level and does not reconstruct the hierarchy.
+- Duplicate URLs merge with all folder associations. A source may appear in multiple exported categories but becomes one source when reimported.
+- Merge matches folders by exact name and retains existing source names, IDs, and associations. Replace uses imported names/categories while retaining known URL IDs.
+- OPML contains no project-specific IDs. A new environment generates new IDs. Reading state, cached content, and saved notes are not part of OPML.
+- Outline `title` takes precedence over `text`; unnamed feeds use their URL. Feed URLs must use HTTP(S).
+- Malformed XML, RSS outlines without `xmlUrl`, unsupported outline types, unnamed categories, and ambiguous flattened names reject the entire import. DTD/custom entity declarations are rejected; standard XML escaping is supported.
+- Standard OPML cannot distinguish same-named folders. Rename ambiguous folders before export or matching them to existing folders on import.
 
-- 匯入接受 OPML 1.0、1.1、2.0；匯出為 OPML 2.0。YAML 仍是唯一訂閱權威來源。
-- 巢狀分類攤平成 `父分類 / 子分類`，父分類與空分類保留；匯出為單層分類，不重建原階層。
-- 重複 URL 合併並保留全部分類。匯出時同來源可出現在多個分類，再匯入仍是一個來源。
-- 合併以完全相同的分類名稱對應既有分類，保留既有來源名稱、ID 與分類關聯；取代使用匯入名稱／分類，但已知 URL 仍沿用原 ID。
-- OPML 不包含本專案 ID；搬到全新環境會產生 ID。閱讀狀態、正文快取與保存筆記不包含在 OPML。
-- 優先使用 outline 的 title，再用 text；文章來源沒有名稱時用 URL。Feed URL 必須是 HTTP(S)。
-- 格式錯誤、RSS outline 缺少 xmlUrl、未支援的 outline 類型、無名稱分類或攤平名稱歧義會使整次匯入失敗，不部分套用。DTD／自訂 entity 宣告不接受，標準 XML 字元 escaping 可用。
-- 同名資料夾無法在標準 OPML 交換時區分；匯出或對應既有分類遇到同名歧義時，請先重新命名。
+## Reporting issues
+
+Report problems through [GitHub Issues](https://github.com/kywk/obsidian-feed-reader/issues). Include Obsidian and plugin versions, operating system, steps to reproduce, and relevant errors. For parsing/import issues, provide a minimal public feed URL or sanitized sample. Remove private notes, credentials, and subscription URLs containing tokens before sharing.
+
+## License
+
+[MIT](LICENSE), copyright 2026 kywk. Third-party dependencies retain their own licenses; see [Third-party notices](THIRD_PARTY_NOTICES.md). The build includes these notices in `main.js` so they accompany installed copies.
