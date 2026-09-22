@@ -55,3 +55,7 @@ Git remote 已設定為 [kywk/obsidian-feed-reader](https://github.com/kywk/obsi
 ## 0.3.0
 
 英文與繁體中文介面已發布至 [GitHub Release](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.3.0)，三個附件雜湊比對一致。官方已確認 0.3.0 排入掃描，尚未取得本版審查完成結果。詳見 [發布紀錄](release-0.3.0.md) 與 [驗證範圍](i18n-validation.md)。
+
+## 0.4.0
+
+閱讀介面更新已發布至 GitHub 並同步 obs-feedly；官方已確認 0.4.0 排入掃描，尚未取得本版審查完成結果。詳見 [發布與驗證紀錄](release-0.4.0.md)。
