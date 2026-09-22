@@ -4,15 +4,19 @@ import { DEFAULT_NOTE_TEMPLATES, validateNoteTemplates, type NoteTemplates } fro
 import { articleKey, renderArticleNote, renderNoteFilename } from './save/markdown';
 import { sanitizeArticleHtml } from './ui/content';
 import type { Article, FeedSource } from './domain/models';
+import { DEFAULT_ENRICHMENT, type EnrichmentSettings } from './enrichment/config';
+import { displayEnrichmentSettings } from './enrichment/settings-ui';
 
-export interface FeedReaderSettings extends NoteTemplates { subscriptionsPath: string; savedArticlesFolder: string; markReadOnNavigate: boolean; }
-export const DEFAULT_SETTINGS: FeedReaderSettings = { ...DEFAULT_NOTE_TEMPLATES, subscriptionsPath: 'Feed Reader/feeds.yaml', savedArticlesFolder: 'Feed Reader/Articles', markReadOnNavigate: false };
+export interface FeedReaderSettings extends NoteTemplates { subscriptionsPath: string; savedArticlesFolder: string; markReadOnNavigate: boolean; enrichment: EnrichmentSettings; }
+export const DEFAULT_SETTINGS: FeedReaderSettings = { ...DEFAULT_NOTE_TEMPLATES, subscriptionsPath: 'Feed Reader/feeds.yaml', savedArticlesFolder: 'Feed Reader/Articles', markReadOnNavigate: false, enrichment: DEFAULT_ENRICHMENT };
 export function isVaultRelative(path: string): boolean {
   return path.length > 0 && !/^(\/|[A-Za-z]:)/.test(path) && !path.includes('\\') && path.split('/').every(part => Boolean(part) && part !== '.' && part !== '..');
 }
 export class FeedReaderSettingTab extends PluginSettingTab {
+  private cleanupEnrichment?: () => void;
   constructor(app: App, private readonly plugin: FeedReaderPlugin) { super(app, plugin); }
   display(): void {
+    this.cleanupEnrichment?.();
     this.containerEl.empty();
     let subscriptionsPath = this.plugin.settings.subscriptionsPath;
     new Setting(this.containerEl).setName('Subscriptions YAML').setDesc('Vault-relative YAML path. Apply validates the file before switching.')
@@ -25,8 +29,10 @@ export class FeedReaderSettingTab extends PluginSettingTab {
     new Setting(this.containerEl).setName('Mark read on j/k navigation')
       .addToggle(toggle => toggle.setValue(this.plugin.settings.markReadOnNavigate).onChange(value => this.apply(() => this.plugin.changeMarkReadOnNavigate(value))));
     this.displayNoteTemplates();
+    this.cleanupEnrichment = displayEnrichmentSettings(this.containerEl, this.plugin.settings.enrichment, value => this.plugin.changeEnrichment(value), this.plugin.enrichment);
     new Setting(this.containerEl).setName('Open reader').addButton(button => button.setButtonText('Open').onClick(() => { void this.apply(() => this.plugin.openReader()); }));
   }
+  hide(): void { this.cleanupEnrichment?.(); }
   private displayNoteTemplates(): void {
     const section = this.containerEl.createDiv({ cls: 'vfr-template-settings' });
     new Setting(section).setName('Saved note templates').setHeading();
@@ -49,7 +55,7 @@ export class FeedReaderSettingTab extends PluginSettingTab {
       text.inputEl.setAttribute('aria-label', 'Body template');
       editors.push({ key: 'noteBodyTemplate', setValue: value => text.setValue(value) });
     });
-    new Setting(section).setName('Custom Properties').setDesc('YAML mapping without --- markers. Quote values containing variables, e.g. source: "{{feed}}". Supports scalar values and lists. title and feed_reader_* are supplied automatically and cannot be overridden.')
+    new Setting(section).setName('Custom Properties').setDesc('YAML mapping without --- markers. Quote values containing variables, e.g. source: "{{feed}}". Supports scalar values and lists. title, date_created, date_updated and feed_reader_* are supplied automatically and cannot be overridden.')
       .addTextArea(text => {
         text.setPlaceholder('tags:\n  - rss\nstatus: inbox\nsource: "{{feed}}"');
         text.setValue(draft.notePropertiesTemplate).onChange(value => { draft.notePropertiesTemplate = value; update(); });

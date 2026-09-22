@@ -12,9 +12,12 @@ import { markScopeRead } from './ui/manage/batch';
 import { ReaderScheduler } from './scheduler';
 import type { Article, ArticleSummary, FeedSource } from './domain/models';
 import { validateNoteTemplates, type NoteTemplates } from './save/templates';
+import { EnrichmentController } from './enrichment/controller';
+import { DEFAULT_ENRICHMENT, validateEnrichment, type EnrichmentSettings } from './enrichment/config';
 
 export default class FeedReaderPlugin extends Plugin {
   settings: FeedReaderSettings = { ...DEFAULT_SETTINGS };
+  enrichment?: EnrichmentController;
   private subscriptions!: SubscriptionService;
   private readState!: ReadStateService;
   private cache!: IndexedDbArticleCache;
@@ -33,6 +36,7 @@ export default class FeedReaderPlugin extends Plugin {
   async onload(): Promise<void> {
     this.stopped = false;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings.enrichment = { ...structuredClone(DEFAULT_ENRICHMENT), ...this.settings.enrichment };
     const adapter = this.app.vault.adapter;
     if (!(adapter instanceof FileSystemAdapter)) throw new Error('Vault Feed Reader requires a desktop vault');
     this.cache = new IndexedDbArticleCache(adapter.getBasePath());
@@ -85,18 +89,28 @@ export default class FeedReaderPlugin extends Plugin {
     this.addRibbonIcon('rss', 'Open RSS reader', open);
     this.addCommand({ id: 'open-reader', name: 'Open RSS reader', callback: open });
     this.addCommand({ id: 'manage-sources', name: 'Manage sources', callback: () => this.openManager() });
+    this.enrichment = new EnrichmentController(this, () => this.settings.enrichment);
+    this.enrichment.register();
     this.addSettingTab(new FeedReaderSettingTab(this.app, this));
     syncPresence();
   }
 
   onunload(): void {
     this.stopped = true;
+    this.enrichment?.dispose();
     this.scheduler?.dispose(); this.refreshService?.dispose(); this.subscriptions?.stop(); this.saves?.dispose();
     // Obsidian owns registered leaves; preserve their layout across reloads.
     this.cache?.dispose();
   }
 
   async saveSettings(): Promise<void> { await this.saveData(this.settings); }
+
+  async changeEnrichment(value: EnrichmentSettings): Promise<void> {
+    validateEnrichment(value);
+    const previous = this.settings.enrichment;
+    this.settings.enrichment = value;
+    try { await this.saveSettings(); } catch (error) { this.settings.enrichment = previous; throw error; }
+  }
 
   async changeSubscriptionsPath(path: string): Promise<void> {
     if (!isVaultRelative(path) || !/\.ya?ml$/i.test(path)) throw new Error('Choose a vault-relative .yaml or .yml path');
