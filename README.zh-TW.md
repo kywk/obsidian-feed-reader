@@ -10,7 +10,7 @@ MVP 與 OPML 匯入／匯出已實作；OPML 完整工作區 build 與 90 個一
 
 開發前閱讀 [AGENTS.md](AGENTS.md)；提交與驗收規範由該檔按需導引。歷次成果與提交脈絡見 [進展索引](docs/progress.md)。
 
-本功能分支新增筆記全文擷取與本機 CLI 摘要；驗證範圍見[本次紀錄](docs/history/2026-09-22-article-enrichment/validation.md)，尚未驗證原生 Obsidian 與真實模型互通。
+0.2.0 新增筆記全文擷取與本機 CLI 摘要；驗證範圍見[本次紀錄](docs/history/2026-09-22-article-enrichment/validation.md)，尚未驗證原生 Obsidian 與真實模型互通。
 
 ## 開發與本機安裝
 
@@ -26,7 +26,7 @@ npm run test:scale
 npm run dev
 ```
 
-將 `main.js`、`manifest.json`、`styles.css` 複製到測試 vault 的 `.obsidian/plugins/vault-feed-reader/`，在 Settings → Community plugins 啟用 **Vault Feed Reader**。更新檔案後停用再啟用插件。已提交社群目錄；0.1.0 與 0.1.1 未通過自動審查，0.1.2 進一步移除重複外掛名稱的設定標題，仍待審查通過。可由 [GitHub Releases](https://github.com/kywk/obsidian-feed-reader/releases) 手動安裝；驗證範圍見[審查修正記錄](docs/community-review-validation.md)。
+將 `main.js`、`manifest.json`、`styles.css` 複製到測試 vault 的 `.obsidian/plugins/vault-feed-reader/`，在 Settings → Community plugins 啟用 **Vault Feed Reader**。更新檔案後停用再啟用插件。已提交社群目錄；0.1.0 與 0.1.1 未通過自動審查，0.1.2 進一步移除重複外掛名稱的設定標題，0.1.2 自動審查已完成；0.2.0 需獨立審查。可由 [GitHub Releases](https://github.com/kywk/obsidian-feed-reader/releases) 手動安裝；驗證範圍見[審查修正記錄](docs/community-review-validation.md)。
 
 ## 閱讀流程
 

@@ -8,11 +8,11 @@ A desktop RSS and Atom reader for Obsidian, built for browsing many feeds and sa
 
 The MVP and OPML import/export are implemented. The recorded OPML validation passed the build and 90 regular tests, with one opt-in scale test skipped. OPML has not yet been tested in Obsidian or against real exports from other readers. See [OPML validation](docs/opml-validation.md) and the earlier [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md) for the scope and limitations of previous checks.
 
-This feature branch adds note full-text retrieval and local CLI summaries. See [feature validation](docs/history/2026-09-22-article-enrichment/validation.md); native Obsidian and real model interoperability are not yet verified.
+Version 0.2.0 adds note full-text retrieval and local CLI summaries. See [feature validation](docs/history/2026-09-22-article-enrichment/validation.md); native Obsidian and real model interoperability are not yet verified.
 
 - Desktop Obsidian only; declared minimum version: **1.8.7**. This does not mean every desktop version has been tested.
 - No Feedly or other service account is required. Only public HTTP(S) feeds are supported.
-- Submitted to the Community Plugins directory. Versions 0.1.0 and 0.1.1 failed automated review; 0.1.2 also removes the redundant plugin-name settings heading. Approval is pending.
+- Submitted to the Community Plugins directory. The 0.1.2 automated review completed successfully; 0.2.0 introduces note enrichment and will undergo its own review.
 - Install manually from [GitHub Releases](https://github.com/kywk/obsidian-feed-reader/releases); see [review remediation](docs/community-review-validation.md) for validation scope.
 
 ## Installation and development
