@@ -46,7 +46,7 @@ npm run dev
 
 ## 訂閱與閱讀狀態
 
-YAML 是唯一訂閱權威來源。UI 修改回寫 YAML；支援 YAML／TOML 匯入與匯出，匯入預設合併，取代需確認。合併依 URL 去重並保留既有分類與來源 ID；不同 query 不會合併。
+YAML 是唯一訂閱權威來源。UI 修改回寫 YAML；支援 YAML／TOML／OPML 匯入與匯出，匯入預設合併，取代需確認。合併依 URL 去重並保留既有分類與來源 ID；不同 query 不會合併。
 
 外部修改 YAML 會自動載入。檔案損壞時顯示錯誤、沿用最後有效清單並停止 UI 回寫，修正後恢復。來源 URL 是身分的一部分；需要換 URL 時請新增來源，名稱與分類可以直接編輯。
 
@@ -124,3 +124,17 @@ source: "{{feed}}"
 設定頁即時預覽範例文章的檔名與 Markdown 原始碼；未知變數、錯誤 YAML 或保留欄位會顯示錯誤並停用 Apply。按 **Apply templates** 才保存設定；**Load defaults** 只重設草稿，仍須 Apply。`title` 與 `feed_reader_*` 由系統維護，不能由自訂 Properties 覆蓋。
 
 模板只影響新建筆記。已保存的文章仍開啟原筆記，不重新套版、不覆寫心得；修改模板也不會批次改寫歷史筆記。原有使用者未設定模板時沿用預設格式。
+
+
+## OPML 訂閱搬移
+
+在 **Manage sources → Import / export** 將 Format 選為 **OPML**，貼上內容或選擇 `.opml`／`.xml` 檔案，再按 Import。選檔不會自動切换格式，請先確認 Format。匯入預設 Merge；Replace all subscriptions 仍須確認。Generate export 可複製 OPML 文字，Download 下載 `feeds.opml`。
+
+- 匯入接受 OPML 1.0、1.1、2.0；匯出為 OPML 2.0。YAML 仍是唯一訂閱權威來源。
+- 巢狀分類攤平成 `父分類 / 子分類`，父分類與空分類保留；匯出為單層分類，不重建原階層。
+- 重複 URL 合併並保留全部分類。匯出時同來源可出現在多個分類，再匯入仍是一個來源。
+- 合併以完全相同的分類名稱對應既有分類，保留既有來源名稱、ID 與分類關聯；取代使用匯入名稱／分類，但已知 URL 仍沿用原 ID。
+- OPML 不包含本專案 ID；搬到全新環境會產生 ID。閱讀狀態、正文快取與保存筆記不包含在 OPML。
+- 優先使用 outline 的 title，再用 text；文章來源沒有名稱時用 URL。Feed URL 必須是 HTTP(S)。
+- 格式錯誤、RSS outline 缺少 xmlUrl、未支援的 outline 類型、無名稱分類或攤平名稱歧義會使整次匯入失敗，不部分套用。DTD／自訂 entity 宣告不接受，標準 XML 字元 escaping 可用。
+- 同名資料夾無法在標準 OPML 交換時區分；匯出或對應既有分類遇到同名歧義時，請先重新命名。
