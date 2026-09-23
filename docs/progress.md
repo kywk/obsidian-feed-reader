@@ -59,3 +59,9 @@ OPML 三筆提交的共同驗證在分批前的完整工作區執行：build 通
 依官方 0.4.0 掃描的 46 項 Warnings 修正 timer popout 相容性、globalThis、createEl、unsafe any、多餘 assertion、escape／control regex 與 deprecated XML API；以 `eslint-plugin-obsidianmd` 重現後僅餘 1 項 `prefer-setting-definitions`（需 Obsidian 1.13 宣告式 API）。新增 `fast-xml-validator`、`fast-xml-builder` 依賴。驗證與未修正項見[審查修正與驗證](community-review-validation.md)。
 
 版本提交 b00c916；[GitHub Release 0.4.1](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.4.1) 已公開並設為 Latest，三個附件下載雜湊與本機一致。`npm run build` PASS；`npm test` 195 passed、1 scale skipped。官方 Check for new releases 尚未執行。詳見 [0.4.1 發布紀錄](release-0.4.1.md)。
+
+## 0.5.0 根目錄變更、雜誌版面與預設篩選發布
+
+新增自訂 Feed Reader 根目錄設定（目錄為空時提供搬移既有檔案或建立新來源對話框）、單一 Feed 雜誌風格卡片版面（縮圖、作者、時間、摘要與日期分組）及預設未讀文章列表篩選設定。
+
+版本提交 87f84c2；[GitHub Release 0.5.0](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.5.0) 已公開並設為 Latest，三個附件下載雜湊與本機一致。`npm run build` PASS；`npm test` 215 passed、1 scale skipped。官方 Check for new releases 尚未執行。詳見 [0.5.0 發布紀錄](release-0.5.0.md)。
