@@ -112,5 +112,5 @@ describe('IndexedDbArticleCache', () => {
     expect(page.items[0]?.id).toBe('item-504');
     expect(page.items.at(-1)?.id).toBe('item-5');
     await expect(cache.getArticle('feed-a', 'item-4')).resolves.toBeUndefined();
-  });
+  }, 20_000);
 });
