@@ -116,6 +116,7 @@ export const zhTW = {
   "Unread": "未讀",
   "Read": "已讀",
   "Today": "今日",
+  "Yesterday": "昨天",
   "Saved": "已保存",
   "Open RSS reader": "開啟 RSS 閱讀器",
   "Vault Feed Reader requires a desktop vault": "Vault Feed Reader 需要桌面版 vault",

@@ -139,6 +139,10 @@ async function parseEntry(
           : `body:${contentHtml}`;
   const id = `a_${await sha256(`${context.feedId}\n${identity}`)}`;
 
+  const author = entryAuthor(entry, kind);
+  const snippet = entrySnippet(entry, kind, contentHtml);
+  const imageUrl = entryImageUrl(entry, kind, contentHtml, entryBase);
+
   return {
     id,
     feedId: context.feedId,
@@ -147,6 +151,9 @@ async function parseEntry(
     ...(publishedAt ? { publishedAt } : {}),
     firstFetchedAt: context.fetchedAt,
     contentHtml,
+    ...(author ? { author } : {}),
+    ...(snippet ? { snippet } : {}),
+    ...(imageUrl ? { imageUrl } : {}),
   };
 }
 
@@ -270,4 +277,149 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
+}
+
+function entryAuthor(entry: XmlNode, kind: 'rss' | 'atom'): string | undefined {
+  if (kind === 'atom') {
+    const authorNode = asNode(entry.author);
+    if (authorNode) {
+      const name = textValue(authorNode.name) ?? textValue(authorNode['#text']);
+      if (name) return cleanText(name);
+    }
+    const direct = textValue(entry.author);
+    if (direct) return cleanText(direct);
+  }
+  const creator = textValue(entry.creator ?? entry['dc:creator']);
+  if (creator) return cleanText(creator);
+  const author = entry.author;
+  const authorNode = asNode(author);
+  if (authorNode) {
+    const name = textValue(authorNode.name) ?? textValue(authorNode['#text']);
+    if (name) return cleanText(name);
+  }
+  const directAuthor = textValue(author);
+  if (directAuthor) {
+    const match = /\(([^)]+)\)/.exec(directAuthor);
+    return cleanText(match ? match[1] : directAuthor);
+  }
+  return undefined;
+}
+
+function entryImageUrl(
+  entry: XmlNode,
+  kind: 'rss' | 'atom',
+  contentHtml: string,
+  base: string,
+): string | undefined {
+  // 1. Enclosures
+  for (const item of asArray(entry.enclosure)) {
+    const node = asNode(item);
+    if (node) {
+      const type = attribute(node, 'type') ?? '';
+      const url = attribute(node, 'url');
+      if (url && (type.startsWith('image/') || isImageExtension(url))) {
+        const resolved = resolveHttpUrl(url, base);
+        if (resolved) return resolved;
+      }
+    }
+  }
+
+  // 2. Media thumbnails / contents
+  const mediaNodes = [
+    ...asArray(entry.thumbnail),
+    ...asArray(entry['media:thumbnail']),
+    ...asArray(entry['media:content']),
+    ...asArray(entry.content).filter((c) => typeof c === 'object' && c !== null && ('@_url' in (c as Record<string, unknown>))),
+  ];
+  for (const item of mediaNodes) {
+    const node = asNode(item);
+    if (node) {
+      const url = attribute(node, 'url') ?? textValue(node['#text']);
+      const medium = attribute(node, 'medium');
+      const type = attribute(node, 'type') ?? '';
+      if (url && (medium === 'image' || type.startsWith('image/') || isImageExtension(url) || (!medium && !type))) {
+        const resolved = resolveHttpUrl(url, base);
+        if (resolved) return resolved;
+      }
+    }
+  }
+
+  // 3. itunes:image
+  for (const item of [...asArray(entry.image), ...asArray(entry['itunes:image'])]) {
+    const node = asNode(item);
+    if (node) {
+      const href = attribute(node, 'href') ?? attribute(node, 'url');
+      if (href) {
+        const resolved = resolveHttpUrl(href, base);
+        if (resolved) return resolved;
+      }
+    }
+  }
+
+  // 4. First <img> tag in description, summary, or contentHtml
+  const candidates = [
+    typeof entry.description === 'string' ? entry.description : '',
+    typeof entry.summary === 'string' ? entry.summary : '',
+    contentHtml,
+  ];
+  for (const html of candidates) {
+    if (!html) continue;
+    const match = /<img\s+[^>]*src=["']([^"']+)["']/i.exec(html);
+    if (match && match[1]) {
+      const src = match[1].trim();
+      if (!src.startsWith('data:') && !src.includes('1x1') && !src.includes('spacer')) {
+        const resolved = resolveHttpUrl(src, base);
+        if (resolved) return resolved;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function isImageExtension(url: string): boolean {
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    return /\.(jpe?g|png|webp|gif|avif|svg)$/i.test(path);
+  } catch {
+    return false;
+  }
+}
+
+function entrySnippet(
+  entry: XmlNode,
+  kind: 'rss' | 'atom',
+  contentHtml: string,
+): string | undefined {
+  const rawSummary =
+    kind === 'atom'
+      ? (entry.summary ?? entry.content)
+      : (entry.description ?? entry.encoded ?? entry.content);
+  let text = '';
+  if (typeof rawSummary === 'string') {
+    text = stripHtml(rawSummary);
+  } else if (contentHtml) {
+    text = stripHtml(contentHtml);
+  }
+  if (!text) return undefined;
+  if (text.length > 160) {
+    return text.slice(0, 160).trim() + ' [...]';
+  }
+  return text;
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\s+/g, ' ')
+    .trim();
 }

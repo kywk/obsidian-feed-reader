@@ -72,4 +72,39 @@ describe('parseFeedXml', () => {
       }),
     ).rejects.toThrow(/could not be parsed/i);
   });
+
+  it('extracts author, snippet, and image URL from enclosure, media tags, or embedded HTML', async () => {
+    const xml = `
+      <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <channel>
+          <title>Tech Feed</title>
+          <link>https://example.com</link>
+          <item>
+            <title>Article with image and creator</title>
+            <link>https://example.com/item1</link>
+            <dc:creator>TechNews Editor</dc:creator>
+            <description><![CDATA[<p>This is a short <strong>summary</strong> of the story.</p><img src="https://example.com/cover.jpg">]]></description>
+          </item>
+          <item>
+            <title>Article with enclosure</title>
+            <link>https://example.com/item2</link>
+            <enclosure url="https://example.com/photo.png" type="image/png" />
+            <description>Simple description without html.</description>
+          </item>
+        </channel>
+      </rss>
+    `;
+    const articles = await parseFeedXml(xml, {
+      feedId: 'tech-feed',
+      feedUrl: 'https://example.com/rss.xml',
+    });
+
+    expect(articles).toHaveLength(2);
+    expect(articles[0]?.author).toBe('TechNews Editor');
+    expect(articles[0]?.imageUrl).toBe('https://example.com/cover.jpg');
+    expect(articles[0]?.snippet).toBe('This is a short summary of the story.');
+
+    expect(articles[1]?.imageUrl).toBe('https://example.com/photo.png');
+    expect(articles[1]?.snippet).toBe('Simple description without html.');
+  });
 });

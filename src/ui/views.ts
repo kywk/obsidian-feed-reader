@@ -398,17 +398,81 @@ export class ReaderView extends ItemView {
   private renderRows(query: string): void {
     const list = this.listEl; if (!list) return;
     list.querySelector('.vfr-rows')?.remove(); list.querySelector('.vfr-page-controls')?.remove();
-    const rows = list.createDiv({ cls: 'vfr-rows', attr: { role: 'listbox', 'aria-label': t("Articles") } });
+    const isDetailedView = this.readerScope.kind === 'feed';
+    const rows = list.createDiv({
+      cls: `vfr-rows${isDetailedView ? ' vfr-magazine-view' : ''}`,
+      attr: { role: 'listbox', 'aria-label': t("Articles") }
+    });
     const visible = this.summaries.slice(0, PAGE_SIZE);
     if (!visible.length && !this.loading) rows.createEl('p', { text: t("No articles match this view.") });
-    for (const summary of visible) {
-      const index = this.summaries.indexOf(summary);
-      const row = rows.createEl('button', { cls: `vfr-article-row${index === this.selectedIndex ? ' is-selected' : ''}`, attr: { role: 'option', 'aria-selected': String(index === this.selectedIndex) } });
-      row.createSpan({ cls: 'vfr-article-source', text: this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === summary.feedId)?.title ?? t("Saved article") });
-      row.createSpan({ cls: 'vfr-article-title', text: summary.title || t("Untitled article") });
-      row.createSpan({ cls: 'vfr-article-date', text: formatDate(summary) });
-      if (!this.articleRead(summary)) row.addClass('is-unread');
-      row.addEventListener('click', () => { this.selectedIndex = index; void this.openSelected().catch(error => this.showError(error)); });
+
+    if (isDetailedView) {
+      let lastDateGroup: string | undefined;
+      for (const summary of visible) {
+        const index = this.summaries.indexOf(summary);
+        const groupLabel = formatGroupDate(summary);
+        if (groupLabel && groupLabel !== lastDateGroup) {
+          lastDateGroup = groupLabel;
+          rows.createDiv({
+            cls: 'vfr-date-group-header',
+            text: groupLabel,
+            attr: { 'aria-hidden': 'true' }
+          });
+        }
+
+        const row = rows.createEl('button', {
+          cls: `vfr-article-row vfr-magazine-row${index === this.selectedIndex ? ' is-selected' : ''}`,
+          attr: { role: 'option', 'aria-selected': String(index === this.selectedIndex) }
+        });
+        if (!this.articleRead(summary)) row.addClass('is-unread');
+
+        if (summary.imageUrl) {
+          const thumb = row.createDiv({ cls: 'vfr-magazine-thumbnail' });
+          const img = thumb.createEl('img', {
+            attr: {
+              src: summary.imageUrl,
+              alt: summary.title || '',
+              loading: 'lazy',
+              referrerpolicy: 'no-referrer',
+            }
+          });
+          img.addEventListener('error', () => { thumb.remove(); });
+        }
+
+        const details = row.createDiv({ cls: 'vfr-magazine-details' });
+        details.createDiv({ cls: 'vfr-article-title', text: summary.title || t("Untitled article") });
+
+        const meta = details.createDiv({ cls: 'vfr-magazine-meta' });
+        const relTime = formatRelativeTime(summary);
+        if (summary.author) {
+          meta.createSpan({ cls: 'vfr-magazine-author', text: `by ${summary.author}` });
+          if (relTime) {
+            meta.createSpan({ cls: 'vfr-magazine-meta-sep', text: ' / ' });
+            meta.createSpan({ cls: 'vfr-magazine-time', text: relTime });
+          }
+        } else if (relTime) {
+          meta.createSpan({ cls: 'vfr-magazine-time', text: relTime });
+        }
+
+        if (summary.snippet) {
+          details.createDiv({ cls: 'vfr-magazine-snippet', text: summary.snippet });
+        }
+
+        row.addEventListener('click', () => {
+          this.selectedIndex = index;
+          void this.openSelected().catch(error => this.showError(error));
+        });
+      }
+    } else {
+      for (const summary of visible) {
+        const index = this.summaries.indexOf(summary);
+        const row = rows.createEl('button', { cls: `vfr-article-row${index === this.selectedIndex ? ' is-selected' : ''}`, attr: { role: 'option', 'aria-selected': String(index === this.selectedIndex) } });
+        row.createSpan({ cls: 'vfr-article-source', text: this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === summary.feedId)?.title ?? t("Saved article") });
+        row.createSpan({ cls: 'vfr-article-title', text: summary.title || t("Untitled article") });
+        row.createSpan({ cls: 'vfr-article-date', text: formatDate(summary) });
+        if (!this.articleRead(summary)) row.addClass('is-unread');
+        row.addEventListener('click', () => { this.selectedIndex = index; void this.openSelected().catch(error => this.showError(error)); });
+      }
     }
     if (this.nextCursor || this.pageHistory.length) {
       const controls = list.createDiv({ cls: 'vfr-page-controls' });
@@ -649,6 +713,47 @@ function isToday(article: ArticleSummary, now = new Date()): boolean {
 function formatDate(article: ArticleSummary): string {
   const date = new Date(effectiveArticleTimestamp(article));
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString(getLocale()) : '';
+}
+
+function formatGroupDate(article: ArticleSummary): string {
+  const date = new Date(effectiveArticleTimestamp(article));
+  if (!Number.isFinite(date.getTime())) return '';
+  const now = new Date();
+
+  const isTodayDate =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  if (isTodayDate) return t("Today");
+
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate();
+  if (isYesterday) return t("Yesterday");
+
+  return date.toLocaleDateString(getLocale(), {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function formatRelativeTime(article: ArticleSummary): string {
+  const date = new Date(effectiveArticleTimestamp(article));
+  if (!Number.isFinite(date.getTime())) return '';
+  const now = Date.now();
+  const diffMs = Math.max(0, now - date.getTime());
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffMin < 1) return 'now';
+  if (diffMin < 60) return `${diffMin}m`;
+  if (diffHour < 24) return `${diffHour}h`;
+  if (diffDay < 30) return `${diffDay}d`;
+  return date.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
 }
 
 function addActionIcon(element: HTMLElement, icon: string): void {

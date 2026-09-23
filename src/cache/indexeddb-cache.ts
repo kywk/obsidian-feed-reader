@@ -212,6 +212,9 @@ export class IndexedDbArticleCache implements ArticleCache {
         ...(article.publishedAt ? { publishedAt: article.publishedAt } : {}),
         firstFetchedAt,
         sortTimestamp: effectiveTimestamp(article.publishedAt, firstFetchedAt),
+        ...(article.author ? { author: article.author } : {}),
+        ...(article.snippet ? { snippet: article.snippet } : {}),
+        ...(article.imageUrl ? { imageUrl: article.imageUrl } : {}),
       };
       const content: ContentRecord = {
         vaultId: this.vaultId,
@@ -335,6 +338,9 @@ function toSummary(record: MetadataRecord): ArticleSummary {
     ...(record.url ? { url: record.url } : {}),
     ...(record.publishedAt ? { publishedAt: record.publishedAt } : {}),
     firstFetchedAt: record.firstFetchedAt,
+    ...(record.author ? { author: record.author } : {}),
+    ...(record.snippet ? { snippet: record.snippet } : {}),
+    ...(record.imageUrl ? { imageUrl: record.imageUrl } : {}),
   };
 }
 

@@ -24,6 +24,9 @@ export interface ArticleSummary {
   url?: string;
   publishedAt?: string;
   firstFetchedAt: string;
+  author?: string;
+  snippet?: string;
+  imageUrl?: string;
 }
 
 export interface Article extends ArticleSummary {

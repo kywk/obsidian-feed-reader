@@ -440,3 +440,70 @@ it('applies defaultListFilter to feed and folder clicks in SourcesView', async (
   await sources.onClose();
   root.remove();
 });
+
+describe('Feed vs folder view layout', () => {
+  it('renders simple list layout for folder selection and detailed magazine layout for single feed', async () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const state = createReaderUiState();
+    const richItem: ArticleSummary = {
+      id: 'rich-1',
+      feedId: feed.id,
+      title: 'Detailed Article Title',
+      publishedAt: '2026-09-24T00:00:00.000Z',
+      firstFetchedAt: '2026-09-24T00:00:00.000Z',
+      author: 'TechNews Reporter',
+      snippet: 'This is the snippet of the article [...]',
+      imageUrl: 'https://example.test/thumb.jpg',
+    };
+
+    const cache = {
+      queryMetadata: vi.fn(async () => ({ items: [richItem] })),
+      getArticle: vi.fn(async () => ({ ...richItem, contentHtml: '<p>Content</p>' })),
+    };
+
+    const view = new ReaderView({ contentEl: root } as never, {
+      state,
+      cache,
+      subscriptions: {
+        getSnapshot: () => ({
+          document: {
+            version: 1 as const,
+            feeds: [feed],
+            folders: [{ id: 'folder-1', title: 'Folder' }],
+          },
+          writable: true,
+        }),
+        subscribe: () => () => {},
+      },
+    });
+
+    await view.onOpen();
+
+    // 1. When folder is selected: simple list layout
+    state.select({ kind: 'folder', folderId: 'folder-1', filter: 'all' });
+    await vi.waitFor(() => expect(root.querySelectorAll('.vfr-article-row')).toHaveLength(1));
+    const folderRow = root.querySelector<HTMLElement>('.vfr-article-row')!;
+    expect(folderRow.classList.contains('vfr-magazine-row')).toBe(false);
+    expect(folderRow.querySelector('.vfr-article-source')).not.toBeNull();
+    expect(folderRow.querySelector('.vfr-article-title')).not.toBeNull();
+    expect(folderRow.querySelector('.vfr-article-date')).not.toBeNull();
+    expect(folderRow.querySelector('.vfr-magazine-thumbnail')).toBeNull();
+    expect(folderRow.querySelector('.vfr-magazine-snippet')).toBeNull();
+    expect(root.querySelector('.vfr-date-group-header')).toBeNull();
+
+    // 2. When single feed is selected: detailed magazine layout with thumbnail
+    state.select({ kind: 'feed', feedId: feed.id, filter: 'all' });
+    await vi.waitFor(() => expect(root.querySelector('.vfr-magazine-row')).not.toBeNull());
+    const feedRow = root.querySelector<HTMLElement>('.vfr-magazine-row')!;
+    expect(feedRow.querySelector('.vfr-magazine-thumbnail img')).not.toBeNull();
+    expect(feedRow.querySelector('.vfr-magazine-thumbnail img')?.getAttribute('src')).toBe('https://example.test/thumb.jpg');
+    expect(feedRow.querySelector('.vfr-article-title')?.textContent).toBe('Detailed Article Title');
+    expect(feedRow.querySelector('.vfr-magazine-author')?.textContent).toContain('TechNews Reporter');
+    expect(feedRow.querySelector('.vfr-magazine-snippet')?.textContent).toBe('This is the snippet of the article [...]');
+    expect(root.querySelector('.vfr-date-group-header')).not.toBeNull();
+
+    await view.onClose();
+    root.remove();
+  });
+});
