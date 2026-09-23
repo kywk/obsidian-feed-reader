@@ -243,3 +243,45 @@ it('persists the language preference and rolls back after a failed write', async
   await expect(FeedReaderPlugin.prototype.changeLanguage.call(plugin as never, 'en')).rejects.toThrow('disk full');
   expect(settings.language).toBe('zh-TW');
 });
+
+it('renders default list filter setting and changes it', async () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  const changeDefaultListFilter = vi.fn(async (filter: string) => { settings.defaultListFilter = filter as typeof settings.defaultListFilter; });
+  const tab = new FeedReaderSettingTab({} as never, { settings, changeDefaultListFilter } as never);
+  tab.display();
+  const select = [...tab.containerEl.querySelectorAll('select')][1]!;
+  expect([...select.options].map(option => option.value)).toEqual(['unread', 'all', 'read', 'today']);
+  expect(select.value).toBe('unread');
+  select.value = 'all'; select.dispatchEvent(new Event('change'));
+  await vi.waitFor(() => expect(changeDefaultListFilter).toHaveBeenCalledWith('all'));
+});
+
+it('persists default list filter preference, refreshes sources views, and rolls back after failed write', async () => {
+  const { default: FeedReaderPlugin } = await import('../../src/main');
+  const { SourcesView } = await import('../../src/ui/views');
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  const saveSettings = vi.fn(async () => {});
+  const refresh = vi.fn();
+  const leafView = Object.create(SourcesView.prototype);
+  leafView.refresh = refresh;
+  const dependencies: { defaultListFilter?: string } = {};
+  const plugin = {
+    settings,
+    saveSettings,
+    dependencies,
+    app: {
+      workspace: {
+        getLeavesOfType: vi.fn(() => [{ view: leafView }]),
+      },
+    },
+  };
+  await FeedReaderPlugin.prototype.changeDefaultListFilter.call(plugin as never, 'all');
+  expect(settings.defaultListFilter).toBe('all');
+  expect(dependencies.defaultListFilter).toBe('all');
+  expect(saveSettings).toHaveBeenCalledOnce();
+  expect(refresh).toHaveBeenCalledOnce();
+
+  saveSettings.mockRejectedValueOnce(new Error('disk full'));
+  await expect(FeedReaderPlugin.prototype.changeDefaultListFilter.call(plugin as never, 'today')).rejects.toThrow('disk full');
+  expect(settings.defaultListFilter).toBe('all');
+});

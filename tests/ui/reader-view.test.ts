@@ -260,7 +260,7 @@ describe('Sidebar reopening the reader', () => {
   it('requests the reader with the selected source even after the previous reader has closed', async () => {
     const { view, state } = setup(); await view.onOpen(); await view.onClose();
     const root = document.createElement('div'); document.body.append(root);
-    const onOpenReader = vi.fn(async () => { expect(state.getScope()).toEqual({ kind: 'feed', feedId: feed.id, filter: 'all' }); });
+    const onOpenReader = vi.fn(async () => { expect(state.getScope()).toEqual({ kind: 'feed', feedId: feed.id, filter: 'unread' }); });
     const sources = new SourcesView({ contentEl: root } as never, {
       state, ...{ onOpenReader },
       subscriptions: { getSnapshot: () => ({ document: { version: 1, feeds: [feed], folders: [{ id: 'folder-1', title: 'Folder' }] }, writable: true }), subscribe: () => () => {} },
@@ -268,6 +268,7 @@ describe('Sidebar reopening the reader', () => {
     await sources.onOpen();
     root.querySelector<HTMLButtonElement>('[title="A feed"]')!.click();
     await vi.waitFor(() => expect(onOpenReader).toHaveBeenCalledOnce());
+    expect(state.getScope()).toEqual({ kind: 'feed', feedId: feed.id, filter: 'unread' });
     await sources.onClose();
   });
 });
@@ -391,4 +392,51 @@ it('keeps the article title in navigation and shows back-to-top only after scrol
   expect(top.hidden).toBe(true);
   await view.onClose();
   expect(root.querySelector('.vfr-back-to-top')).toBeNull();
+});
+
+it('defaults reader list mode to unread and allows configuring default list filter', async () => {
+  const root = document.createElement('div'); document.body.append(root);
+  const viewUnread = new ReaderView({ contentEl: root } as never, {
+    cache: { queryMetadata: async () => ({ items: [] }), getArticle: async () => undefined },
+    subscriptions: { getSnapshot: () => ({ document: { version: 1, feeds: [feed], folders: [] }, writable: true }), subscribe: () => () => {} },
+  });
+  await viewUnread.onOpen();
+  const unreadBtn = root.querySelector<HTMLButtonElement>('.vfr-filter-actions button:nth-child(2)')!;
+  expect(unreadBtn.textContent).toBe('Unread');
+  expect(unreadBtn.getAttribute('aria-pressed')).toBe('true');
+  await viewUnread.onClose();
+  root.remove();
+
+  const rootAll = document.createElement('div'); document.body.append(rootAll);
+  const viewAll = new ReaderView({ contentEl: rootAll } as never, {
+    defaultListFilter: 'all',
+    cache: { queryMetadata: async () => ({ items: [] }), getArticle: async () => undefined },
+    subscriptions: { getSnapshot: () => ({ document: { version: 1, feeds: [feed], folders: [] }, writable: true }), subscribe: () => () => {} },
+  });
+  await viewAll.onOpen();
+  const allBtn = rootAll.querySelector<HTMLButtonElement>('.vfr-filter-actions button:nth-child(1)')!;
+  expect(allBtn.textContent).toBe('All articles');
+  expect(allBtn.getAttribute('aria-pressed')).toBe('true');
+  await viewAll.onClose();
+  rootAll.remove();
+});
+
+it('applies defaultListFilter to feed and folder clicks in SourcesView', async () => {
+  const root = document.createElement('div'); document.body.append(root);
+  const state = createReaderUiState();
+  const onOpenReader = vi.fn();
+  const sources = new SourcesView({ contentEl: root } as never, {
+    state, onOpenReader, defaultListFilter: 'today',
+    subscriptions: { getSnapshot: () => ({ document: { version: 1, feeds: [feed], folders: [{ id: 'folder-1', title: 'Folder' }] }, writable: true }), subscribe: () => () => {} },
+  });
+  await sources.onOpen();
+  root.querySelector<HTMLButtonElement>('[title="A feed"]')!.click();
+  await vi.waitFor(() => expect(onOpenReader).toHaveBeenCalledOnce());
+  expect(state.getScope()).toEqual({ kind: 'feed', feedId: feed.id, filter: 'today' });
+
+  root.querySelector<HTMLButtonElement>('[title="Folder"]')!.click();
+  await vi.waitFor(() => expect(onOpenReader).toHaveBeenCalledTimes(2));
+  expect(state.getScope()).toEqual({ kind: 'folder', folderId: 'folder-1', filter: 'today' });
+  await sources.onClose();
+  root.remove();
 });

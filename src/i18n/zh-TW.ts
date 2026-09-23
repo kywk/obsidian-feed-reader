@@ -6,6 +6,8 @@ export const zhTW = {
   "Saved articles folder": "文章保存資料夾",
   "Vault-relative folder for future saves. Existing notes remain available.": "之後保存文章的 vault 相對資料夾。既有筆記仍可開啟。",
   "Mark read on j/k navigation": "使用 j/k 切換時標為已讀",
+  "Default list filter": "預設列表篩選",
+  "Initial filter applied when opening article lists (e.g. unread, all articles, read, or today).": "開啟文章列表時預設套用的篩選（未讀、全部文章、已讀或今日）。",
   "Open reader": "開啟閱讀器",
   "Open": "開啟",
   "Saved note templates": "保存筆記模板",

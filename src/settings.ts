@@ -4,12 +4,12 @@ import type FeedReaderPlugin from './main';
 import { DEFAULT_NOTE_TEMPLATES, validateNoteTemplates, type NoteTemplates } from './save/templates';
 import { articleKey, renderArticleNote, renderNoteFilename } from './save/markdown';
 import { sanitizeArticleHtml } from './ui/content';
-import type { Article, FeedSource } from './domain/models';
+import type { Article, FeedSource, ListFilter } from './domain/models';
 import { DEFAULT_ENRICHMENT, type EnrichmentSettings } from './enrichment/config';
 import { displayEnrichmentSettings } from './enrichment/settings-ui';
 
-export interface FeedReaderSettings extends NoteTemplates { language: Language; subscriptionsPath: string; savedArticlesFolder: string; markReadOnNavigate: boolean; enrichment: EnrichmentSettings; }
-export const DEFAULT_SETTINGS: FeedReaderSettings = { ...DEFAULT_NOTE_TEMPLATES, language: 'auto', subscriptionsPath: 'Feed Reader/feeds.yaml', savedArticlesFolder: 'Feed Reader/Articles', markReadOnNavigate: false, enrichment: DEFAULT_ENRICHMENT };
+export interface FeedReaderSettings extends NoteTemplates { language: Language; subscriptionsPath: string; savedArticlesFolder: string; markReadOnNavigate: boolean; defaultListFilter: ListFilter; enrichment: EnrichmentSettings; }
+export const DEFAULT_SETTINGS: FeedReaderSettings = { ...DEFAULT_NOTE_TEMPLATES, language: 'auto', subscriptionsPath: 'Feed Reader/feeds.yaml', savedArticlesFolder: 'Feed Reader/Articles', markReadOnNavigate: false, defaultListFilter: 'unread', enrichment: DEFAULT_ENRICHMENT };
 export function isVaultRelative(path: string): boolean {
   return path.length > 0 && !/^(\/|[A-Za-z]:)/.test(path) && !path.includes('\\') && path.split('/').every(part => Boolean(part) && part !== '.' && part !== '..');
 }
@@ -38,6 +38,9 @@ export class FeedReaderSettingTab extends PluginSettingTab {
     new Setting(this.containerEl).setName(t("Saved articles folder")).setDesc(t("Vault-relative folder for future saves. Existing notes remain available."))
       .addText(text => text.setValue(folder).onChange(value => { folder = value.trim(); }))
       .addButton(button => button.setButtonText(t("Apply")).onClick(() => { void this.apply(() => this.plugin.changeSavedFolder(folder)); }));
+    new Setting(this.containerEl).setName(t("Default list filter")).setDesc(t("Initial filter applied when opening article lists (e.g. unread, all articles, read, or today)."))
+      .addDropdown(dropdown => dropdown.addOptions({ unread: t("Unread"), all: t("All articles"), read: t("Read"), today: t("Today") })
+        .setValue(this.plugin.settings.defaultListFilter).onChange(value => this.apply(() => this.plugin.changeDefaultListFilter(value as ListFilter))));
     new Setting(this.containerEl).setName(t("Mark read on j/k navigation"))
       .addToggle(toggle => toggle.setValue(this.plugin.settings.markReadOnNavigate).onChange(value => this.apply(() => this.plugin.changeMarkReadOnNavigate(value))));
     this.displayNoteTemplates();

@@ -39,3 +39,4 @@ export interface FeedReadState {
 }
 
 export type ArticleFilter = 'all' | 'read' | 'unread' | 'today' | 'saved';
+export type ListFilter = Exclude<ArticleFilter, 'saved'>;

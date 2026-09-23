@@ -11,7 +11,7 @@ import { sanitizeArticleHtml } from './ui/content';
 import { MANAGE_VIEW, ManageSubscriptionsView } from './ui/manage/subscriptions';
 import { markScopeRead } from './ui/manage/batch';
 import { ReaderScheduler } from './scheduler';
-import type { Article, ArticleSummary, FeedSource } from './domain/models';
+import type { Article, ArticleSummary, FeedSource, ListFilter } from './domain/models';
 import { validateNoteTemplates, type NoteTemplates } from './save/templates';
 import { EnrichmentController } from './enrichment/controller';
 import { DEFAULT_ENRICHMENT, validateEnrichment, type EnrichmentSettings } from './enrichment/config';
@@ -38,6 +38,10 @@ export default class FeedReaderPlugin extends Plugin {
     this.stopped = false;
     const stored = (await this.loadData()) as Partial<FeedReaderSettings> | null;
     this.settings = { ...DEFAULT_SETTINGS, ...stored };
+    const validListFilters: ListFilter[] = ['unread', 'all', 'read', 'today'];
+    if (!validListFilters.includes(this.settings.defaultListFilter)) {
+      this.settings.defaultListFilter = 'unread';
+    }
     this.settings.language = normalizeLanguage(this.settings.language);
     configureLanguage(this.settings.language, getLanguage());
     this.settings.enrichment = { ...structuredClone(DEFAULT_ENRICHMENT), ...this.settings.enrichment };
@@ -54,7 +58,8 @@ export default class FeedReaderPlugin extends Plugin {
     this.knownSources = new Set(snapshot.document.feeds.map(feed => feed.id));
     this.dependencies = {
       subscriptions: this.subscriptions, cache: this.cache, readState: this.readState,
-      state: createReaderUiState(), markReadOnNavigate: this.settings.markReadOnNavigate,
+      state: createReaderUiState(this.settings.defaultListFilter), markReadOnNavigate: this.settings.markReadOnNavigate,
+      defaultListFilter: this.settings.defaultListFilter,
       getSavedArticles: () => this.saves.listSavedArticles(),
       getFeedErrors: () => this.feedErrors,
       onManageSubscriptions: () => this.openManager(),
@@ -155,6 +160,18 @@ export default class FeedReaderPlugin extends Plugin {
     this.settings.markReadOnNavigate = value;
     try { await this.saveSettings(); } catch (error) { this.settings.markReadOnNavigate = previous; throw error; }
     this.dependencies.markReadOnNavigate = value;
+  }
+
+  async changeDefaultListFilter(value: ListFilter): Promise<void> {
+    const validListFilters: ListFilter[] = ['unread', 'all', 'read', 'today'];
+    const normalized: ListFilter = validListFilters.includes(value) ? value : 'unread';
+    const previous = this.settings.defaultListFilter;
+    this.settings.defaultListFilter = normalized;
+    try { await this.saveSettings(); } catch (error) { this.settings.defaultListFilter = previous; throw error; }
+    this.dependencies.defaultListFilter = normalized;
+    for (const leaf of this.app.workspace.getLeavesOfType(SOURCES_VIEW)) {
+      if (leaf.view instanceof SourcesView) leaf.view.refresh();
+    }
   }
 
   async changeNoteTemplates(templates: NoteTemplates): Promise<void> {

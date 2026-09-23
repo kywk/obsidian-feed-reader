@@ -1,6 +1,6 @@
 import { t, getLocale } from '../i18n';
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from 'obsidian';
-import type { Article, ArticleFilter, ArticleSummary, FeedReadState, FeedSource, SubscriptionDocument } from '../domain/models';
+import type { Article, ArticleFilter, ArticleSummary, FeedReadState, FeedSource, ListFilter, SubscriptionDocument } from '../domain/models';
 import type { ArticleCache } from '../cache';
 import { effectiveArticleTimestamp, isArticleRead, type ReadStateService } from '../read-state';
 import type { SubscriptionService } from '../subscriptions';
@@ -13,8 +13,8 @@ const PAGE_SIZE = 50;
 
 export type ReaderScope =
   | { kind: 'global'; filter: ArticleFilter }
-  | { kind: 'feed'; feedId: string; filter: Exclude<ArticleFilter, 'saved'> }
-  | { kind: 'folder'; folderId: string; filter: Exclude<ArticleFilter, 'saved'> };
+  | { kind: 'feed'; feedId: string; filter: ListFilter }
+  | { kind: 'folder'; folderId: string; filter: ListFilter };
 
 export interface ReaderScopeBatchRequest { scope: ReaderScope; before: Date; all?: boolean; }
 
@@ -35,6 +35,7 @@ export interface ReaderViewDependencies {
   /** Mark every matching item in this scope read; T5 can page cache metadata safely. */
   onMarkScopeRead?: (request: ReaderScopeBatchRequest) => Promise<void> | void;
   markReadOnNavigate?: boolean;
+  defaultListFilter?: ListFilter;
   state?: ReaderUiState;
 }
 
@@ -42,9 +43,12 @@ type ScopeListener = (scope: ReaderScope) => void;
 
 /** Shared by the two Obsidian leaves so a source click changes the reader. */
 export class ReaderUiState {
-  private scope: ReaderScope = { kind: 'global', filter: 'all' };
+  private scope: ReaderScope;
   private readonly listeners = new Set<ScopeListener>();
   private readonly batchListeners = new Set<() => void>();
+  constructor(initialScope: ReaderScope = { kind: 'global', filter: 'unread' }) {
+    this.scope = initialScope;
+  }
   getScope(): ReaderScope { return this.scope; }
   select(scope: ReaderScope): void {
     this.scope = scope;
@@ -61,7 +65,11 @@ export class ReaderUiState {
   }
 }
 
-export function createReaderUiState(): ReaderUiState { return new ReaderUiState(); }
+export function createReaderUiState(initialScopeOrFilter?: ReaderScope | ListFilter): ReaderUiState {
+  if (!initialScopeOrFilter) return new ReaderUiState({ kind: 'global', filter: 'unread' });
+  if (typeof initialScopeOrFilter === 'string') return new ReaderUiState({ kind: 'global', filter: initialScopeOrFilter });
+  return new ReaderUiState(initialScopeOrFilter);
+}
 
 export class SourcesView extends ItemView {
   private readonly state: ReaderUiState;
@@ -71,7 +79,7 @@ export class SourcesView extends ItemView {
   private generation = 0;
   private closed = true;
   constructor(leaf: WorkspaceLeaf, private readonly dependencies: ReaderViewDependencies = {}) {
-    super(leaf); this.state = dependencies.state ?? createReaderUiState();
+    super(leaf); this.state = dependencies.state ?? createReaderUiState(dependencies.defaultListFilter);
   }
   getViewType(): string { return SOURCES_VIEW; }
   getDisplayText(): string { return t("RSS sources"); }
@@ -118,6 +126,9 @@ export class SourcesView extends ItemView {
       }
     } catch { /* Counts are supplementary; source errors remain visible. */ }
   }
+  private getDefaultListFilter(): ListFilter {
+    return this.dependencies.defaultListFilter ?? 'unread';
+  }
   private render(): void {
     const snapshot = this.dependencies.subscriptions?.getSnapshot();
     this.contentEl.empty();
@@ -139,6 +150,7 @@ export class SourcesView extends ItemView {
     if (snapshot.error) root.createEl('p', { cls: 'vfr-error', text: snapshot.error.message });
     this.row(root, t("All articles"), 'list-filter', { kind: 'global', filter: 'all' }, snapshot.document.feeds.map(feed => feed.id));
     if (!snapshot.document.feeds.length) root.createEl('p', { cls: 'vfr-empty-sources', text: t("Add your first source to start reading.") });
+    const defaultFilter = this.getDefaultListFilter();
     for (const folder of snapshot.document.folders) {
       const feeds = snapshot.document.feeds.filter(feed => feed.folderIds.includes(folder.id));
       const section = root.createDiv({ cls: 'vfr-folder' });
@@ -154,7 +166,7 @@ export class SourcesView extends ItemView {
         toggle.setAttribute('aria-expanded', String(!children.hidden));
         setIcon(toggle, children.hidden ? 'chevron-right' : 'chevron-down');
       });
-      this.row(heading, folder.title, undefined, { kind: 'folder', folderId: folder.id, filter: 'all' }, feeds.map(feed => feed.id));
+      this.row(heading, folder.title, undefined, { kind: 'folder', folderId: folder.id, filter: defaultFilter }, feeds.map(feed => feed.id));
       feeds.forEach(feed => this.feedRow(children, feed));
     }
     const unfiled = snapshot.document.feeds.filter(feed => !feed.folderIds.length);
@@ -165,7 +177,7 @@ export class SourcesView extends ItemView {
     this.updateSelection();
   }
   private feedRow(parent: HTMLElement, feed: FeedSource): void {
-    const button = this.row(parent, feed.title, 'rss', { kind: 'feed', feedId: feed.id, filter: 'all' }, [feed.id]);
+    const button = this.row(parent, feed.title, 'rss', { kind: 'feed', feedId: feed.id, filter: this.getDefaultListFilter() }, [feed.id]);
     const error = this.dependencies.getFeedErrors?.().get(feed.id);
     if (error) {
       button.title = `${feed.title}: ${error}`;
@@ -231,7 +243,7 @@ export class ReaderView extends ItemView {
 
   constructor(leaf: WorkspaceLeaf, private readonly dependencies: ReaderViewDependencies = {}) {
     super(leaf);
-    this.state = dependencies.state ?? createReaderUiState();
+    this.state = dependencies.state ?? createReaderUiState(dependencies.defaultListFilter);
     this.readerScope = this.state.getScope();
   }
   getViewType(): string { return READER_VIEW; }
@@ -614,7 +626,7 @@ export class ReaderView extends ItemView {
     await this.refresh();
   }
   private showError(error: unknown): void { if (!this.closed) { this.stateError = message(error); this.renderList(); new Notice(this.stateError); } }
-  private setScopeFilter(filter: Exclude<ArticleFilter, 'saved'>): void {
+  private setScopeFilter(filter: ListFilter): void {
     if (this.readerScope.kind === 'global') this.state.select({ kind: 'global', filter });
     else if (this.readerScope.kind === 'feed') this.state.select({ ...this.readerScope, filter });
     else this.state.select({ ...this.readerScope, filter });
