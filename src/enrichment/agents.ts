@@ -94,7 +94,7 @@ export async function summarizeWithAgent(config: AgentConfig, options: Summarize
       let stdout = '', size = 0, settled = false;
       const finish = (error?: Error) => {
         if (settled) return;
-        settled = true; clearTimeout(timer); options.signal?.removeEventListener('abort', abort);
+        settled = true; window.clearTimeout(timer); options.signal?.removeEventListener('abort', abort);
         if (error) {
           try {
             if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGKILL');
@@ -104,7 +104,7 @@ export async function summarizeWithAgent(config: AgentConfig, options: Summarize
         } else resolve(stdout);
       };
       const abort = () => finish(new Error('摘要已取消'));
-      const timer = setTimeout(() => finish(new Error('Agent 摘要逾時')), options.timeoutMs ?? 120_000);
+      const timer = window.setTimeout(() => finish(new Error('Agent 摘要逾時')), options.timeoutMs ?? 120_000);
       options.signal?.addEventListener('abort', abort, { once: true });
       const collect = (chunk: Buffer | string, keep: boolean) => {
         size += Buffer.byteLength(chunk);
@@ -113,8 +113,8 @@ export async function summarizeWithAgent(config: AgentConfig, options: Summarize
       };
       child.stdout.setEncoding('utf8');
       child.stderr.setEncoding('utf8');
-      child.stdout.on('data', chunk => collect(chunk, true));
-      child.stderr.on('data', chunk => collect(chunk, false));
+      child.stdout.on('data', (chunk: Buffer | string) => collect(chunk, true));
+      child.stderr.on('data', (chunk: Buffer | string) => collect(chunk, false));
       child.on('error', () => finish(new Error('無法啟動 Agent，請檢查執行檔與權限')));
       child.on('close', code => finish(code === 0 ? undefined : new Error(`Agent 執行失敗（退出碼 ${code ?? 'signal'}），請在終端機檢查登入與設定`)));
       child.stdin.on('error', () => finish(new Error('Agent 無法讀取文章輸入')));

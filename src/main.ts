@@ -36,7 +36,8 @@ export default class FeedReaderPlugin extends Plugin {
 
   async onload(): Promise<void> {
     this.stopped = false;
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const stored = (await this.loadData()) as Partial<FeedReaderSettings> | null;
+    this.settings = { ...DEFAULT_SETTINGS, ...stored };
     this.settings.language = normalizeLanguage(this.settings.language);
     configureLanguage(this.settings.language, getLanguage());
     this.settings.enrichment = { ...structuredClone(DEFAULT_ENRICHMENT), ...this.settings.enrichment };

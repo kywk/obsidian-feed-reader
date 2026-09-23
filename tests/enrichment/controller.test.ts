@@ -23,6 +23,14 @@ let dom: JSDOM;
 beforeEach(() => {
   dom = new JSDOM('<!doctype html>');
   vi.stubGlobal('document', dom.window.document);
+  vi.stubGlobal('createFragment', () => dom.window.document.createDocumentFragment());
+  const makeElement = (tag: string, options?: { text?: string }): HTMLElement => {
+    const element = dom.window.document.createElement(tag);
+    if (options?.text !== undefined) element.textContent = options.text;
+    return element;
+  };
+  vi.stubGlobal('createEl', makeElement);
+  vi.stubGlobal('createSpan', (options?: { text?: string }) => makeElement('span', options));
   mocks.notices.length = 0;
   mocks.enrich.mockReset();
   mocks.summarize.mockReset();

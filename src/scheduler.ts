@@ -1,6 +1,6 @@
 /** Reader presence owns refreshing; a delayed timer performs only one catch-up. */
 export class ReaderScheduler {
-  private timer?: ReturnType<typeof setInterval>;
+  private timer?: number;
   private present = false;
   private disposed = false;
   private pending = false;
@@ -11,9 +11,9 @@ export class ReaderScheduler {
     this.present = present;
     if (present) {
       void this.run();
-      this.timer = setInterval(() => this.check(), Math.min(this.interval, 60_000));
+      this.timer = window.setInterval(() => this.check(), Math.min(this.interval, 60_000));
     } else {
-      clearInterval(this.timer);
+      window.clearInterval(this.timer);
       this.timer = undefined;
     }
   }
@@ -29,6 +29,6 @@ export class ReaderScheduler {
   dispose(): void {
     this.disposed = true;
     this.present = false;
-    clearInterval(this.timer);
+    window.clearInterval(this.timer);
   }
 }

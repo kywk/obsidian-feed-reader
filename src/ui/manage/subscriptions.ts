@@ -117,7 +117,13 @@ export class ManageSubscriptionsView extends ItemView {
   }
   private confirm(title: string, description: string, action: () => Promise<unknown>): void {
     this.heading(title, 'confirm'); this.contentEl.createEl('p', { text: description });
-    new Setting(this.contentEl).addButton(button => button.setButtonText(t("Confirm")).setWarning().onClick(() => { void this.run(action); }));
+    new Setting(this.contentEl).addButton(button => {
+      const confirmButton = button.setButtonText(t("Confirm"));
+      // setDestructive needs Obsidian 1.13; fall back to setWarning on the declared 1.8.7 minimum.
+      const style = confirmButton as unknown as { setDestructive?: () => unknown; setWarning?: () => unknown };
+      (style.setDestructive ?? style.setWarning)?.call(confirmButton);
+      confirmButton.onClick(() => { void this.run(action); });
+    });
   }
   private transfer(): void {
     this.heading(t("Import / export subscriptions"), 'transfer');

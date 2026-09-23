@@ -56,7 +56,7 @@ export function renderProperties(template: string, context: TemplateContext): Re
   if (document.errors.length) throw new Error(`Invalid Properties YAML: ${document.errors[0]!.message}`);
   const value: unknown = document.toJS({ maxAliasCount: 0 });
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Properties must be a YAML mapping');
-  const result: Record<string, unknown> = Object.create(null);
+  const result = Object.create(null) as Record<string, unknown>;
   const scalar = (item: unknown): unknown => {
     if (typeof item === 'string') return renderTemplate(item, context, 'property');
     if (item === null || typeof item === 'boolean' || (typeof item === 'number' && Number.isFinite(item))) return item;

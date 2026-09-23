@@ -19,7 +19,9 @@ class ChoiceModal extends Modal {
       text.value = this.preview;
       text.rows = 20;
     }
-    this.options.forEach((label, index) => new Setting(this.contentEl).setName(label).addButton(button => button.setButtonText(t("Select")).onClick(() => this.finish(index))));
+    this.options.forEach((label, index) => {
+      new Setting(this.contentEl).setName(label).addButton(button => button.setButtonText(t("Select")).onClick(() => this.finish(index)));
+    });
     new Setting(this.contentEl).addButton(button => button.setButtonText(t("Cancel")).onClick(() => this.finish(null)));
   }
   private finish(value: number | null): void { this.settled = true; this.resolve(value); this.close(); }
@@ -32,7 +34,7 @@ export class EnrichmentController {
   private jobs = new Map<TFile, AbortController>();
   private tests = new Set<AbortController>();
   constructor(private plugin: Plugin, private settings: () => EnrichmentSettings) {
-    const stored: Partial<LocalAgents> | null = plugin.app.loadLocalStorage(LOCAL_KEY);
+    const stored = plugin.app.loadLocalStorage(LOCAL_KEY) as Partial<LocalAgents> | null;
     this.local = {
       agents: Array.isArray(stored?.agents) ? stored.agents : DEFAULT_AGENT_CONFIGS.map(agent => ({ ...agent })),
       defaultId: typeof stored?.defaultId === 'string' ? stored.defaultId : 'codex',
@@ -82,10 +84,10 @@ export class EnrichmentController {
     if (this.jobs.has(file)) { new Notice(t("This note already has an operation in progress")); return; }
     const abort = new AbortController();
     this.jobs.set(file, abort);
-    const message = document.createDocumentFragment();
-    message.append(document.createTextNode(t("Processing article… ")));
-    const cancel = document.createElement('button');
-    cancel.textContent = t("Cancel"); cancel.addEventListener('click', () => abort.abort(), { once: true }); message.append(cancel);
+    const message = createFragment();
+    message.append(createSpan({ text: t("Processing article… ") }));
+    const cancel = createEl('button', { text: t("Cancel") });
+    cancel.addEventListener('click', () => abort.abort(), { once: true }); message.append(cancel);
     const notice = new Notice(message, 0);
     const app = this.plugin.app;
     // Snapshot settings and selected agent for the whole operation.

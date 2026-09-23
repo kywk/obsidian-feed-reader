@@ -12,6 +12,7 @@ import { sanitizeArticleHtml } from '../../src/ui/content';
 beforeAll(() => {
   const dom = new JSDOM('<!doctype html><html><body></body></html>');
   Object.assign(globalThis, { window: dom.window, document: dom.window.document });
+  Object.assign(dom.window, { indexedDB: globalThis.indexedDB });
 });
 
 class VaultFiles implements SubscriptionStorage {

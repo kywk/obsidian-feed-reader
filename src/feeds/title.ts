@@ -1,13 +1,24 @@
-import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
+import { SyntaxValidator } from 'fast-xml-validator';
 import { assertHttpUrl, type FeedTransport } from './transport';
+
+interface FeedTitleDocument {
+  rss?: { channel?: { title?: unknown } };
+  RDF?: { channel?: { title?: unknown } };
+  feed?: { title?: unknown };
+}
+
+function isValidXml(xml: string): boolean {
+  try { SyntaxValidator.validate(xml); return true; } catch { return false; }
+}
 
 /** Reads the feed-level title, never an article title or HTML page title. */
 export function parseFeedTitle(xml: string): string {
   if (xml.length > 5_000_000) throw new Error('Feed is too large to detect its title. Enter a title manually.');
-  if (/<!DOCTYPE|<!ENTITY/i.test(xml) || XMLValidator.validate(xml) !== true) {
+  if (/<!DOCTYPE|<!ENTITY/i.test(xml) || !isValidXml(xml)) {
     throw new Error('Feed XML is invalid or contains unsupported declarations. Enter a title manually.');
   }
-  const document = new XMLParser({ removeNSPrefix: true, ignoreAttributes: true, parseTagValue: false }).parse(xml);
+  const document = new XMLParser({ removeNSPrefix: true, ignoreAttributes: true, parseTagValue: false }).parse(xml) as FeedTitleDocument;
   const title = document.rss?.channel?.title ?? document.RDF?.channel?.title ?? document.feed?.title;
   const text = (value: unknown): string => typeof value === 'string' ? value : value && typeof value === 'object'
     ? Object.values(value).map(text).join(' ') : '';
@@ -20,12 +31,12 @@ export async function fetchFeedTitle(url: string, transport: FeedTransport, sign
   try { assertHttpUrl(url); } catch { throw new Error('Enter a valid HTTP or HTTPS feed URL.'); }
   if (signal.aborted) throw new Error('Title detection cancelled.');
   const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: number | undefined;
   let cancel = (): void => {};
   const interrupted = new Promise<never>((_, reject) => {
     cancel = () => { controller.abort(); reject(new Error('Title detection cancelled.')); };
     signal.addEventListener('abort', cancel, { once: true });
-    timer = setTimeout(() => { controller.abort(); reject(new Error('Title detection timed out. Enter a title manually.')); }, timeoutMs);
+    timer = window.setTimeout(() => { controller.abort(); reject(new Error('Title detection timed out. Enter a title manually.')); }, timeoutMs);
   });
   try {
     const response = await Promise.race([transport.fetch(url, controller.signal).catch(() => { throw new Error('Could not detect the feed title. Enter a title manually.'); }), interrupted]);
@@ -36,5 +47,5 @@ export async function fetchFeedTitle(url: string, transport: FeedTransport, sign
     // Transport errors can contain credentials or query strings; never show them verbatim.
     if (error instanceof Error && /^(Feed |No feed |Title detection)/.test(error.message)) throw error;
     throw new Error('Could not detect the feed title. Enter a title manually.');
-  } finally { clearTimeout(timer); signal.removeEventListener('abort', cancel); }
+  } finally { window.clearTimeout(timer); signal.removeEventListener('abort', cancel); }
 }

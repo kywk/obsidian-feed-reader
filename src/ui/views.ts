@@ -3,7 +3,7 @@ import { ItemView, Notice, WorkspaceLeaf, setIcon } from 'obsidian';
 import type { Article, ArticleFilter, ArticleSummary, FeedReadState, FeedSource, SubscriptionDocument } from '../domain/models';
 import type { ArticleCache } from '../cache';
 import { effectiveArticleTimestamp, isArticleRead, type ReadStateService } from '../read-state';
-import type { SubscriptionService, SubscriptionSnapshot } from '../subscriptions';
+import type { SubscriptionService } from '../subscriptions';
 import { sanitizeArticleFragment } from './content';
 import { articleMarkdownLink } from './links';
 
@@ -624,7 +624,6 @@ export class ReaderView extends ItemView {
 function articleKey(article: ArticleSummary): string { return `${article.feedId}\u0000${article.id}`; }
 function scopeFilter(scope: ReaderScope): ArticleFilter { return scope.filter; }
 function labelForFilter(filter: ArticleFilter): string { return ({ all: t("All articles"), unread: t("Unread"), read: t("Read"), today: t("Today"), saved: t("Saved") })[filter]; }
-function scopeTitle(scope: ReaderScope): string { return scope.kind === 'global' ? labelForFilter(scope.filter) : scope.kind === 'feed' ? t("Source articles") : t("Folder articles"); }
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function isSafeHttpUrl(value: string): boolean { try { const url = new URL(value); return url.protocol === 'http:' || url.protocol === 'https:'; } catch { return false; } }
 function isEditingTarget(target: EventTarget | null): boolean {

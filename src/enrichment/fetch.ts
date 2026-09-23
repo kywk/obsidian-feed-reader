@@ -31,13 +31,13 @@ export async function fetchArticle(url: string, transport: ArticleFetchTransport
   }
   if (options.signal?.aborted) throw new Error('Article fetch cancelled');
   const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: number | undefined;
   let cancel = (): void => {};
   try {
     const cancelled = new Promise<never>((_resolve, reject) => {
       cancel = () => { controller.abort(); reject(new Error('Article fetch cancelled')); };
       options.signal?.addEventListener('abort', cancel, { once: true });
-      timer = setTimeout(() => { controller.abort(); reject(new Error('Article fetch timed out')); }, timeoutMs);
+      timer = window.setTimeout(() => { controller.abort(); reject(new Error('Article fetch timed out')); }, timeoutMs);
     });
     const response = await Promise.race([transport(target, controller.signal), cancelled]);
     if (options.signal?.aborted) throw new Error('Article fetch cancelled');
@@ -69,7 +69,7 @@ export async function fetchArticle(url: string, transport: ArticleFetchTransport
     if (!markdown) throw new Error('No readable article content found');
     return { url: baseUrl, title: article.title || pageTitle, markdown };
   } finally {
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer !== undefined) window.clearTimeout(timer);
     options.signal?.removeEventListener('abort', cancel);
   }
 }

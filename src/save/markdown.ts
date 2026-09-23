@@ -19,7 +19,7 @@ export function safeTitle(value: string): string {
   const title = value
     .normalize('NFC')
     .replace(/[\\/:*?"<>|#[\]^]/g, ' ')
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/[\p{Cc}]/gu, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^\.+|\.+$/g, '')
     .trim();

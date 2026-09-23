@@ -16,7 +16,8 @@ export function isVaultRelative(path: string): boolean {
 export class FeedReaderSettingTab extends PluginSettingTab {
   private cleanupEnrichment?: () => void;
   constructor(app: App, private readonly plugin: FeedReaderPlugin) { super(app, plugin); }
-  display(): void {
+  display(): void { this.render(); }
+  private render(): void {
     this.cleanupEnrichment?.();
     this.containerEl.empty();
     new Setting(this.containerEl).setName(t('Language')).setDesc(t('Changes take effect after disabling and re-enabling the plugin.'))
@@ -126,6 +127,6 @@ export class FeedReaderSettingTab extends PluginSettingTab {
   }
   private async apply(action: () => Promise<void>): Promise<void> {
     try { await action(); } catch (error) { new Notice(translateMessage(error instanceof Error ? error.message : String(error))); }
-    this.display();
+    this.render();
   }
 }

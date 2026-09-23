@@ -13,7 +13,7 @@ export function parseSummaryResult(output: string): ArticleSummaryResult {
   const result = value as Partial<ArticleSummaryResult>;
   if (typeof result.summary !== 'string' || !result.summary.trim()) throw new Error('Agent 沒有回傳摘要');
   if (!Array.isArray(result.tags) || !result.tags.length || result.tags.length > 8 || result.tags.some(tag =>
-    typeof tag !== 'string' || tag.length > 80 || !/^[\p{L}\p{N}_-]+(?:\/[\p{L}\p{N}_-]+)*$/u.test(tag) || !/[\p{L}_\/-]/u.test(tag))) {
+    typeof tag !== 'string' || tag.length > 80 || !/^[\p{L}\p{N}_-]+(?:\/[\p{L}\p{N}_-]+)*$/u.test(tag) || !/[\p{L}_/-]/u.test(tag))) {
     throw new Error('Agent 回傳的 tags 無效，請重試');
   }
   return { summary: result.summary.trim(), tags: result.tags };
@@ -27,7 +27,7 @@ export function mergeSummaryTags(source: string, tags: string[]): string {
   const existing = properties?.tags;
   let previous: string[] = [];
   if (typeof existing === 'string') previous = existing.split(/[,\s]+/u).filter(Boolean);
-  else if (Array.isArray(existing) && existing.every(tag => typeof tag === 'string')) previous = existing;
+  else if (Array.isArray(existing) && existing.every(tag => typeof tag === 'string')) previous = existing as string[];
   else if (existing != null) throw new Error('既有 tags 必須是文字或文字清單，請先修正');
   const merged: string[] = [], seen = new Set<string>();
   for (const tag of [...previous, ...tags]) {

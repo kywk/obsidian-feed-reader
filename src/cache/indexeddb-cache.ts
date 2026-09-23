@@ -48,7 +48,7 @@ export class IndexedDbArticleCache implements ArticleCache {
       throw new Error('vaultId must not be empty');
     }
 
-    const factory = options.indexedDB ?? globalThis.indexedDB;
+    const factory = options.indexedDB ?? window.indexedDB;
     if (!factory) {
       throw new Error('IndexedDB is unavailable');
     }

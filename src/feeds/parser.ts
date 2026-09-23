@@ -1,4 +1,6 @@
-import { XMLBuilder, XMLParser, XMLValidator } from 'fast-xml-parser';
+import { XMLParser } from 'fast-xml-parser';
+import Builder from 'fast-xml-builder';
+import { SyntaxValidator } from 'fast-xml-validator';
 import type { Article } from '../domain/models';
 
 type XmlNode = Record<string, unknown>;
@@ -14,9 +16,10 @@ export async function parseFeedXml(
   options: ParseFeedOptions,
 ): Promise<Article[]> {
   const fetchedAt = normalizeRequiredTimestamp(options.fetchedAt ?? new Date().toISOString());
-  const validation = XMLValidator.validate(xml);
-  if (validation !== true) {
-    throw new Error(`Feed XML could not be parsed: ${validation.err.msg}`);
+  try {
+    SyntaxValidator.validate(xml);
+  } catch (error) {
+    throw new Error(`Feed XML could not be parsed: ${error instanceof Error ? error.message : String(error)}`);
   }
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -184,7 +187,7 @@ function entryContent(entry: XmlNode, kind: 'rss' | 'atom'): string {
   if (elementEntries.length === 0) {
     return directText?.trim() ?? '';
   }
-  const builder = new XMLBuilder({
+  const builder = new Builder({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     textNodeName: '#text',
@@ -263,7 +266,7 @@ function normalizeRequiredTimestamp(value: string): string {
 
 async function sha256(value: string): Promise<string> {
   const data = new TextEncoder().encode(value);
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', data);
+  const digest = await crypto.subtle.digest('SHA-256', data);
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');

@@ -40,7 +40,7 @@ export interface FeedRefreshServiceOptions {
 }
 
 interface Attempt {
-  timer?: ReturnType<typeof setTimeout>;
+  timer?: number;
   active: boolean;
   controller: AbortController;
   feedId: string;
@@ -55,7 +55,7 @@ export class FeedRefreshService {
   private readonly inFlight = new Map<string, Promise<FeedRefreshResult>>();
   private readonly attempts = new Set<Attempt>();
   private disposed = false;
-  private readonly queued = new Map<string, { cancelled: boolean; timer: ReturnType<typeof setTimeout>; publish: (result: FeedRefreshResult) => void }>();
+  private readonly queued = new Map<string, { cancelled: boolean; timer: number; publish: (result: FeedRefreshResult) => void }>();
 
   constructor(
     private readonly transport: FeedTransport,
@@ -88,7 +88,7 @@ export class FeedRefreshService {
     const queued = {
       cancelled: false,
       publish: deferred.resolve,
-      timer: setTimeout(() => {
+      timer: window.setTimeout(() => {
         queued.cancelled = true;
         deferred.resolve(failure(source.id, 'timeout', `Feed queue wait exceeded ${this.timeoutMs} ms`));
       }, this.timeoutMs),
@@ -96,7 +96,7 @@ export class FeedRefreshService {
     this.queued.set(source.id, queued);
     void this.semaphore
       .run(async () => {
-        clearTimeout(queued.timer);
+        window.clearTimeout(queued.timer);
         this.queued.delete(source.id);
         if (!queued.cancelled) await this.runPhysicalAttempt(source, deferred.resolve);
       })
@@ -119,14 +119,14 @@ export class FeedRefreshService {
     const queued = this.queued.get(feedId);
     if (queued) {
       queued.cancelled = true;
-      clearTimeout(queued.timer);
+      window.clearTimeout(queued.timer);
       queued.publish(failure(feedId, 'disposed', 'Source was removed'));
     }
     for (const attempt of this.attempts) {
       if (attempt.feedId !== feedId) continue;
       attempt.active = false;
       attempt.controller.abort();
-      clearTimeout(attempt.timer);
+      window.clearTimeout(attempt.timer);
       attempt.publish(failure(feedId, 'disposed', 'Source was removed'));
     }
   }
@@ -138,14 +138,14 @@ export class FeedRefreshService {
     this.disposed = true;
     for (const [feedId, queued] of this.queued) {
       queued.cancelled = true;
-      clearTimeout(queued.timer);
+      window.clearTimeout(queued.timer);
       queued.publish(failure(feedId, 'disposed', 'Refresh service is disposed'));
     }
     this.queued.clear();
     for (const attempt of this.attempts) {
       attempt.active = false;
       attempt.controller.abort();
-      clearTimeout(attempt.timer);
+      window.clearTimeout(attempt.timer);
       attempt.publish(
         failure(attempt.feedId, 'disposed', 'Refresh service is disposed'),
       );
@@ -183,11 +183,11 @@ export class FeedRefreshService {
     };
     this.attempts.add(attempt);
     let timedOut = false;
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       timedOut = true;
       attempt.active = false;
       attempt.controller.abort();
-      clearTimeout(attempt.timer);
+      window.clearTimeout(attempt.timer);
       publish(
         failure(
           source.id,
@@ -210,7 +210,7 @@ export class FeedRefreshService {
     } finally {
       attempt.active = false;
       this.attempts.delete(attempt);
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
   }
 

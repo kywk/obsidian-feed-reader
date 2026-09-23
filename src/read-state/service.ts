@@ -56,7 +56,7 @@ function validate(value: unknown, expectedFeedId: string): FeedReadState {
   return {
     version: 1,
     feedId: expectedFeedId,
-    ...(record.readBefore === undefined ? {} : { readBefore: record.readBefore as string }),
+    ...(record.readBefore === undefined ? {} : { readBefore: record.readBefore }),
     readIds: unique(record.readIds as string[]),
     unreadIds: unique(record.unreadIds as string[]),
   };

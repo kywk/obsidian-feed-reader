@@ -69,7 +69,7 @@ export class ObsidianSavedNoteStorage implements SavedNoteStorage {
   list(): SavedArticle[] {
     const notes: SavedArticle[] = [];
     for (const file of this.vault.getMarkdownFiles()) {
-      const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter as Record<string, unknown> | undefined;
+      const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter;
       const note = savedArticleFromFrontmatter(file.path, frontmatter);
       if (note) notes.push(note);
     }
@@ -83,7 +83,7 @@ export class ObsidianSavedNoteStorage implements SavedNoteStorage {
       ref: this.metadataCache.on('changed', (file, _data, cache) => {
         const note = savedArticleFromFrontmatter(
           file.path,
-          cache.frontmatter as Record<string, unknown> | undefined,
+          cache.frontmatter,
         );
         listener(note ? { type: 'upsert', note } : { type: 'delete', path: file.path });
       }),
@@ -91,7 +91,7 @@ export class ObsidianSavedNoteStorage implements SavedNoteStorage {
     refs.push({
       owner: this.metadataCache,
       ref: this.metadataCache.on('resolve', file => {
-        const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter as Record<string, unknown> | undefined;
+        const frontmatter = this.metadataCache.getFileCache(file)?.frontmatter;
         const note = savedArticleFromFrontmatter(file.path, frontmatter);
         if (note) listener({ type: 'upsert', note });
       }),
