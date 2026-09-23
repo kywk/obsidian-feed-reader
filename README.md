@@ -81,11 +81,14 @@ Bulk read actions apply to the current source, folder, or all sources, independe
 
 | Data | Default location |
 |---|---|
+| Feed Reader root folder | `Feed Reader` (configurable) |
 | Subscription YAML | `Feed Reader/feeds.yaml` (configurable) |
 | Per-source reading state | `Feed Reader/state/<feedId>.json` |
 | URL-to-ID mapping | `Feed Reader/state/source-ids.json`; preserves identity on resubscription |
 | Saved notes | `Feed Reader/Articles/` (configurable) |
 | Article metadata and content | Local IndexedDB, partitioned by vault path and source |
+
+Under **Settings → Vault Feed Reader → Feed Reader root folder**, you can change the root directory. If changed to an empty or non-existent folder, you are prompted to either move existing files from the original folder or create a new RSS source. If changed to a non-empty existing folder, it switches directly to using that folder.
 
 Back up your vault subscriptions, state, and notes. IndexedDB is a disposable cache that can be rebuilt from available feeds, not a historical archive or cross-device sync source. The plugin does not merge cross-device conflicts.
 

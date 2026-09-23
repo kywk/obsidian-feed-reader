@@ -76,11 +76,14 @@ YAML 是唯一訂閱權威來源。UI 修改回寫 YAML；支援 YAML／TOML／O
 
 | 資料 | 預設位置 |
 |---|---|
+| Feed Reader 根目錄 | `Feed Reader`，可設定 |
 | 訂閱 YAML | `Feed Reader/feeds.yaml`，可設定 |
 | 每來源已讀 JSON | `Feed Reader/state/<feedId>.json` |
 | URL／來源 ID 對照 | `Feed Reader/state/source-ids.json`，保留重新訂閱身分 |
 | 保存筆記 | `Feed Reader/Articles/`，可設定 |
 | 文章 metadata／正文 | 本機 IndexedDB，依 vault 路徑與來源分區 |
+
+在「設定 → Vault Feed Reader → Feed Reader 根目錄」可自訂儲存資料的根目錄。若變更為空目錄，會彈出對話框詢問是否「把原資料夾檔案搬過去」或「建立新 RSS 來源」；若新目錄非空則直接切換。
 
 備份時保留 vault 中的訂閱、state 與筆記。IndexedDB 可重新抓取重建，不作為歷史文章封存。插件不處理跨裝置衝突合併。
 

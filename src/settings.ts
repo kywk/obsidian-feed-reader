@@ -8,8 +8,9 @@ import type { Article, FeedSource, ListFilter } from './domain/models';
 import { DEFAULT_ENRICHMENT, type EnrichmentSettings } from './enrichment/config';
 import { displayEnrichmentSettings } from './enrichment/settings-ui';
 
-export interface FeedReaderSettings extends NoteTemplates { language: Language; subscriptionsPath: string; savedArticlesFolder: string; markReadOnNavigate: boolean; defaultListFilter: ListFilter; enrichment: EnrichmentSettings; }
-export const DEFAULT_SETTINGS: FeedReaderSettings = { ...DEFAULT_NOTE_TEMPLATES, language: 'auto', subscriptionsPath: 'Feed Reader/feeds.yaml', savedArticlesFolder: 'Feed Reader/Articles', markReadOnNavigate: false, defaultListFilter: 'unread', enrichment: DEFAULT_ENRICHMENT };
+export interface FeedReaderSettings extends NoteTemplates { language: Language; rootFolder: string; subscriptionsPath: string; savedArticlesFolder: string; markReadOnNavigate: boolean; defaultListFilter: ListFilter; enrichment: EnrichmentSettings; }
+export const DEFAULT_ROOT_FOLDER = 'Feed Reader';
+export const DEFAULT_SETTINGS: FeedReaderSettings = { ...DEFAULT_NOTE_TEMPLATES, language: 'auto', rootFolder: DEFAULT_ROOT_FOLDER, subscriptionsPath: `${DEFAULT_ROOT_FOLDER}/feeds.yaml`, savedArticlesFolder: `${DEFAULT_ROOT_FOLDER}/Articles`, markReadOnNavigate: false, defaultListFilter: 'unread', enrichment: DEFAULT_ENRICHMENT };
 export function isVaultRelative(path: string): boolean {
   return path.length > 0 && !/^(\/|[A-Za-z]:)/.test(path) && !path.includes('\\') && path.split('/').every(part => Boolean(part) && part !== '.' && part !== '..');
 }
@@ -30,6 +31,10 @@ export class FeedReaderSettingTab extends PluginSettingTab {
             new Notice(translateMessage(error instanceof Error ? error.message : String(error)));
           } finally { dropdown.setDisabled(false); }
         }));
+    let rootFolder = this.plugin.settings.rootFolder;
+    new Setting(this.containerEl).setName(t("Feed Reader root folder")).setDesc(t("Vault-relative root folder for Feed Reader files. If changed to an empty folder, you will be prompted to move existing files or create a new source."))
+      .addText(text => text.setValue(rootFolder).onChange(value => { rootFolder = value.trim(); }))
+      .addButton(button => button.setButtonText(t("Apply")).onClick(() => { void this.apply(() => this.plugin.changeRootFolder(rootFolder)); }));
     let subscriptionsPath = this.plugin.settings.subscriptionsPath;
     new Setting(this.containerEl).setName(t("Subscriptions YAML")).setDesc(t("Vault-relative YAML path. Apply validates the file before switching."))
       .addText(text => text.setValue(subscriptionsPath).onChange(value => { subscriptionsPath = value.trim(); }))

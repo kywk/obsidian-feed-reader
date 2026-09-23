@@ -285,3 +285,26 @@ it('persists default list filter preference, refreshes sources views, and rolls 
   await expect(FeedReaderPlugin.prototype.changeDefaultListFilter.call(plugin as never, 'today')).rejects.toThrow('disk full');
   expect(settings.defaultListFilter).toBe('all');
 });
+
+it('renders Feed Reader root folder setting and applies changes', async () => {
+  const settings = structuredClone(DEFAULT_SETTINGS);
+  const plugin = {
+    settings,
+    changeRootFolder: vi.fn(async (folder: string) => {
+      settings.rootFolder = folder;
+    }),
+  };
+  const tab = new FeedReaderSettingTab({} as never, plugin as never);
+  tab.display();
+
+  const inputs = inputsNamed(tab.containerEl, "Feed Reader root folder");
+  expect(inputs.length).toBe(1);
+  expect(inputs[0]!.value).toBe('Feed Reader');
+
+  editInput(inputs[0]!, 'Custom Feeds');
+  const applyBtn = inputs[0]!.parentElement!.querySelector('button')!;
+  expect(applyBtn.textContent).toBe('Apply');
+  applyBtn.click();
+
+  await vi.waitFor(() => expect(plugin.changeRootFolder).toHaveBeenCalledWith('Custom Feeds'));
+});

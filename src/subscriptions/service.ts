@@ -58,16 +58,36 @@ export class SubscriptionService {
   private unwatch?: () => void;
   private started = false;
   private identities = new Map<string, string>();
+  private _identityPath: string;
 
   constructor(
     private readonly storage: SubscriptionStorage,
     private activePath: string,
     private readonly createFolderId: () => string = () => `folder-${crypto.randomUUID()}`,
-    readonly identityPath = 'Feed Reader/state/source-ids.json',
-  ) {}
+    identityPath = 'Feed Reader/state/source-ids.json',
+  ) {
+    this._identityPath = identityPath;
+  }
 
   get path(): string {
     return this.activePath;
+  }
+
+  get identityPath(): string {
+    return this._identityPath;
+  }
+
+  async setIdentityPath(path: string): Promise<void> {
+    await this.enqueue(async () => {
+      this._identityPath = path;
+      try {
+        await this.loadIdentities();
+      } catch (error) {
+        this.invalidate(error instanceof SubscriptionServiceError
+          ? error
+          : new SubscriptionServiceError('Could not load source identity registry', this._identityPath, error));
+      }
+    });
   }
 
   async start(): Promise<SubscriptionSnapshot> {
@@ -96,7 +116,7 @@ export class SubscriptionService {
     return this.getSnapshot();
   }
 
-  async setPath(path: string): Promise<SubscriptionSnapshot> {
+  async setPath(path: string, identityPath?: string): Promise<SubscriptionSnapshot> {
     if (!path || path.startsWith('/') || path.includes('\\') || path.split('/').includes('..')) {
       throw new SubscriptionServiceError('Subscriptions path must be vault-relative', path);
     }
@@ -104,6 +124,17 @@ export class SubscriptionService {
       this.unwatch?.();
       this.unwatch = undefined;
       this.activePath = path;
+      if (identityPath !== undefined) {
+        this._identityPath = identityPath;
+        try {
+          await this.loadIdentities();
+        } catch (error) {
+          this.invalidate(error instanceof SubscriptionServiceError
+            ? error
+            : new SubscriptionServiceError('Could not load source identity registry', this._identityPath, error));
+          return;
+        }
+      }
       await this.reload(false);
       if (this.started) this.beginWatching();
     });
@@ -111,11 +142,14 @@ export class SubscriptionService {
   }
 
   /** Roll back a failed settings commit without rereading a broken old file. */
-  async restorePath(path: string, snapshot: SubscriptionSnapshot): Promise<void> {
+  async restorePath(path: string, snapshot: SubscriptionSnapshot, identityPath?: string): Promise<void> {
     await this.enqueue(async () => {
       this.unwatch?.();
       this.unwatch = undefined;
       this.activePath = path;
+      if (identityPath !== undefined) {
+        this._identityPath = identityPath;
+      }
       this.document = clone(snapshot.document);
       this.error = snapshot.error;
       this.writable = snapshot.writable;

@@ -20,7 +20,7 @@ vault 內可設定路徑的 YAML 是唯一訂閱權威來源。介面 CRUD 回�
 
 - 訂閱 YAML、按來源分檔且帶版本的已讀 JSON、Markdown 筆記都放 vault。
 - 文章快取放本機，不能假設 `.obsidian/plugins/` 不會同步。建議 IndexedDB，按 vault 身分與 feed ID 分區；可丟棄重建，不需 SQLite。
-- 已讀 JSON 預設目錄 `Feed Reader/state/`；subscriptions 預設 `Feed Reader/feeds.yaml`；保存目錄預設 `Feed Reader/Articles`。後兩項可配置，狀態目錄 MVP 固定即可。
+- 已讀 JSON 預設目錄 `Feed Reader/state/`；subscriptions 預設 `Feed Reader/feeds.yaml`；保存目錄預設 `Feed Reader/Articles`。全域設定支援變更 Feed Reader 根目錄（預設 `Feed Reader`）；變更時若目標新目錄為空，彈出對話框詢問使用者「把原資料夾檔案搬過去」或「建立新 RSS 來源」；若新目錄非空則直接切換至該目錄。根目錄變更同步更新相關相對路徑與執行服務。
 - 每来源存 `readBefore`、`readIds`、`unreadIds`。判定順序：未讀例外 → 個別已讀 → 文章時間早於截止 → 未讀。文章時間採有效發佈時間，缺少則首次抓取時間。
 - 「此日期以前全部已讀」以本地日期起點轉 UTC，使用嚴格早於；「全部標已讀」截止為操作當下，當前已知同時刻文章另入個別已讀，避免等號邊界漏掉。來源／資料夾／全域操作影響對應來源，與文字搜尋無關。
 - 推進截止時清掉涵蓋的未讀例外及可壓縮的個別已讀；已無 metadata 的 IDs 可保留，正確性優先，不建背景壓縮系統。後補的舊文亦算已讀。

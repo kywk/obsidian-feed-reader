@@ -85,10 +85,23 @@ export class ReadStateService {
   private queues = new Map<string, Promise<void>>();
   private listeners = new Set<(feedId: string, result: ReadStateResult) => void>();
 
+  private _directory: string;
+
   constructor(
     private readonly storage: ReadStateStorage,
-    readonly directory = DEFAULT_READ_STATE_DIRECTORY,
-  ) {}
+    directory = DEFAULT_READ_STATE_DIRECTORY,
+  ) {
+    this._directory = directory;
+  }
+
+  get directory(): string {
+    return this._directory;
+  }
+
+  setDirectory(directory: string): void {
+    this._directory = directory;
+    this.cache.clear();
+  }
 
   subscribe(listener: (feedId: string, result: ReadStateResult) => void): () => void {
     this.listeners.add(listener);

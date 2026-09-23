@@ -1,8 +1,8 @@
 import { t, configureLanguage, normalizeLanguage, type Language } from './i18n';
-import { getLanguage, FileSystemAdapter, Notice, Plugin, TFile, requestUrl } from 'obsidian';
-import { DEFAULT_SETTINGS, FeedReaderSettingTab, isVaultRelative, type FeedReaderSettings } from './settings';
+import { getLanguage, FileSystemAdapter, Notice, Plugin, TFile, TFolder, type TAbstractFile, requestUrl } from 'obsidian';
+import { DEFAULT_SETTINGS, DEFAULT_ROOT_FOLDER, FeedReaderSettingTab, isVaultRelative, type FeedReaderSettings } from './settings';
 import { READER_VIEW, ReaderView, SOURCES_VIEW, SourcesView, createReaderUiState, type ReaderViewDependencies } from './ui/views';
-import { SubscriptionService, VaultSubscriptionStorage } from './subscriptions';
+import { SubscriptionService, VaultSubscriptionStorage, serializeSubscriptions, emptySubscriptionDocument } from './subscriptions';
 import { ReadStateService, VaultReadStateStorage } from './read-state';
 import { IndexedDbArticleCache } from './cache';
 import { FeedRefreshService, createObsidianFeedTransport } from './feeds';
@@ -15,6 +15,8 @@ import type { Article, ArticleSummary, FeedSource, ListFilter } from './domain/m
 import { validateNoteTemplates, type NoteTemplates } from './save/templates';
 import { EnrichmentController } from './enrichment/controller';
 import { DEFAULT_ENRICHMENT, validateEnrichment, type EnrichmentSettings } from './enrichment/config';
+import { promptRootFolderAction } from './ui/root-folder-modal';
+import { ensureFolderExists } from './vault-utils';
 
 export default class FeedReaderPlugin extends Plugin {
   settings: FeedReaderSettings = { ...DEFAULT_SETTINGS };
@@ -38,6 +40,13 @@ export default class FeedReaderPlugin extends Plugin {
     this.stopped = false;
     const stored = (await this.loadData()) as Partial<FeedReaderSettings> | null;
     this.settings = { ...DEFAULT_SETTINGS, ...stored };
+    if (!this.settings.rootFolder) {
+      if (stored?.subscriptionsPath && stored.subscriptionsPath.includes('/')) {
+        this.settings.rootFolder = stored.subscriptionsPath.split('/').slice(0, -1).join('/');
+      } else {
+        this.settings.rootFolder = DEFAULT_ROOT_FOLDER;
+      }
+    }
     const validListFilters: ListFilter[] = ['unread', 'all', 'read', 'today'];
     if (!validListFilters.includes(this.settings.defaultListFilter)) {
       this.settings.defaultListFilter = 'unread';
@@ -48,8 +57,10 @@ export default class FeedReaderPlugin extends Plugin {
     const adapter = this.app.vault.adapter;
     if (!(adapter instanceof FileSystemAdapter)) throw new Error(t("Vault Feed Reader requires a desktop vault"));
     this.cache = new IndexedDbArticleCache(adapter.getBasePath());
-    this.subscriptions = new SubscriptionService(new VaultSubscriptionStorage(this.app.vault), this.settings.subscriptionsPath);
-    this.readState = new ReadStateService(new VaultReadStateStorage(this.app.vault));
+    const stateDir = `${this.settings.rootFolder}/state`;
+    const identityPath = `${stateDir}/source-ids.json`;
+    this.subscriptions = new SubscriptionService(new VaultSubscriptionStorage(this.app.vault), this.settings.subscriptionsPath, undefined, identityPath);
+    this.readState = new ReadStateService(new VaultReadStateStorage(this.app.vault), stateDir);
     this.refreshService = new FeedRefreshService(createObsidianFeedTransport(requestUrl), this.cache);
     this.saves = this.makeSaveService(this.settings.savedArticlesFolder);
     this.saves.start();
@@ -125,6 +136,182 @@ export default class FeedReaderPlugin extends Plugin {
     const previous = this.settings.enrichment;
     this.settings.enrichment = value;
     try { await this.saveSettings(); } catch (error) { this.settings.enrichment = previous; throw error; }
+  }
+
+  async changeRootFolder(folderInput: string): Promise<void> {
+    const nextRoot = folderInput.trim().replace(/\/+$/, '');
+    if (!nextRoot || !isVaultRelative(nextRoot)) {
+      throw new Error(t("Choose a vault-relative folder"));
+    }
+    const currentRoot = this.settings.rootFolder;
+    if (nextRoot === currentRoot) return;
+
+    if (this.switchingPath) {
+      throw new Error(t("A subscriptions path change is already in progress"));
+    }
+
+    const target = this.app.vault.getAbstractFileByPath(nextRoot);
+    if (target instanceof TFile) {
+      throw new Error(t("A file with the same name already exists"));
+    }
+
+    const isEmpty = !target || (target instanceof TFolder && target.children.length === 0);
+
+    if (isEmpty) {
+      const choice = await promptRootFolderAction(this.app, currentRoot, nextRoot);
+      if (!choice) return;
+
+      if (choice === 'move') {
+        if (nextRoot.startsWith(currentRoot + '/')) {
+          throw new Error(t("Cannot move a folder into its own subfolder"));
+        }
+        await this.executeMoveRootFolder(currentRoot, nextRoot, target);
+      } else if (choice === 'create-new') {
+        await this.executeCreateNewRootSource(nextRoot);
+      }
+    } else {
+      await this.executeSwitchRootFolder(currentRoot, nextRoot);
+    }
+  }
+
+  private async executeMoveRootFolder(currentRoot: string, nextRoot: string, target: TAbstractFile | null): Promise<void> {
+    this.switchingPath = true;
+    try {
+      const currentAbstract = this.app.vault.getAbstractFileByPath(currentRoot);
+      if (currentAbstract instanceof TFolder) {
+        if (!target) {
+          const parent = nextRoot.split('/').slice(0, -1).join('/');
+          if (parent) await ensureFolderExists(this.app.vault, parent);
+          await this.app.fileManager.renameFile(currentAbstract, nextRoot);
+        } else if (target instanceof TFolder) {
+          for (const child of [...currentAbstract.children]) {
+            await this.app.fileManager.renameFile(child, `${nextRoot}/${child.name}`);
+          }
+          await this.app.vault.delete(currentAbstract);
+        }
+      } else {
+        await ensureFolderExists(this.app.vault, nextRoot);
+      }
+
+      const oldSubscriptionsPath = this.settings.subscriptionsPath;
+      const oldSavedFolder = this.settings.savedArticlesFolder;
+
+      const nextSubscriptionsPath = oldSubscriptionsPath.startsWith(currentRoot + '/')
+        ? `${nextRoot}${oldSubscriptionsPath.slice(currentRoot.length)}`
+        : (oldSubscriptionsPath === currentRoot ? nextRoot : `${nextRoot}/feeds.yaml`);
+
+      const nextSavedFolder = oldSavedFolder.startsWith(currentRoot + '/')
+        ? `${nextRoot}${oldSavedFolder.slice(currentRoot.length)}`
+        : (oldSavedFolder === currentRoot ? nextRoot : `${nextRoot}/Articles`);
+
+      const nextStateDir = `${nextRoot}/state`;
+      const nextIdentityPath = `${nextStateDir}/source-ids.json`;
+
+      const existingFeed = this.app.vault.getAbstractFileByPath(nextSubscriptionsPath);
+      if (!existingFeed) {
+        const initialYaml = serializeSubscriptions(emptySubscriptionDocument(), 'yaml');
+        await this.app.vault.create(nextSubscriptionsPath, initialYaml);
+      }
+
+      this.settings.rootFolder = nextRoot;
+      this.settings.subscriptionsPath = nextSubscriptionsPath;
+      this.settings.savedArticlesFolder = nextSavedFolder;
+      await this.saveSettings();
+
+      this.readState.setDirectory(nextStateDir);
+      await this.subscriptions.setPath(nextSubscriptionsPath, nextIdentityPath);
+
+      this.saves.dispose();
+      this.saves = this.makeSaveService(nextSavedFolder);
+      this.saves.start();
+
+      await this.reconcileSources(this.subscriptions.getSnapshot().document.feeds);
+      this.refreshViews();
+      new Notice(t("Moved Feed Reader files to {folder}", { folder: nextRoot }));
+    } finally {
+      this.switchingPath = false;
+    }
+  }
+
+  private async executeCreateNewRootSource(nextRoot: string): Promise<void> {
+    this.switchingPath = true;
+    try {
+      await ensureFolderExists(this.app.vault, nextRoot);
+
+      const nextSubscriptionsPath = `${nextRoot}/feeds.yaml`;
+      const nextSavedFolder = `${nextRoot}/Articles`;
+      const nextStateDir = `${nextRoot}/state`;
+      const nextIdentityPath = `${nextStateDir}/source-ids.json`;
+
+      const existingFeed = this.app.vault.getAbstractFileByPath(nextSubscriptionsPath);
+      if (!existingFeed) {
+        const initialYaml = serializeSubscriptions(emptySubscriptionDocument(), 'yaml');
+        await this.app.vault.create(nextSubscriptionsPath, initialYaml);
+      }
+
+      this.settings.rootFolder = nextRoot;
+      this.settings.subscriptionsPath = nextSubscriptionsPath;
+      this.settings.savedArticlesFolder = nextSavedFolder;
+      await this.saveSettings();
+
+      this.readState.setDirectory(nextStateDir);
+      await this.subscriptions.setPath(nextSubscriptionsPath, nextIdentityPath);
+
+      this.saves.dispose();
+      this.saves = this.makeSaveService(nextSavedFolder);
+      this.saves.start();
+
+      await this.reconcileSources(this.subscriptions.getSnapshot().document.feeds);
+      this.refreshViews();
+      new Notice(t("Created new RSS source in {folder}", { folder: nextRoot }));
+    } finally {
+      this.switchingPath = false;
+    }
+  }
+
+  private async executeSwitchRootFolder(currentRoot: string, nextRoot: string): Promise<void> {
+    this.switchingPath = true;
+    try {
+      const nextStateDir = `${nextRoot}/state`;
+      const nextIdentityPath = `${nextStateDir}/source-ids.json`;
+
+      let nextSubscriptionsPath = `${nextRoot}/feeds.yaml`;
+      if (this.app.vault.getAbstractFileByPath(`${nextRoot}/feeds.yml`)) {
+        nextSubscriptionsPath = `${nextRoot}/feeds.yml`;
+      } else if (!this.app.vault.getAbstractFileByPath(nextSubscriptionsPath)) {
+        const initialYaml = serializeSubscriptions(emptySubscriptionDocument(), 'yaml');
+        await this.app.vault.create(nextSubscriptionsPath, initialYaml);
+      }
+
+      const nextSavedFolder = `${nextRoot}/Articles`;
+
+      this.settings.rootFolder = nextRoot;
+      this.settings.subscriptionsPath = nextSubscriptionsPath;
+      this.settings.savedArticlesFolder = nextSavedFolder;
+      await this.saveSettings();
+
+      this.readState.setDirectory(nextStateDir);
+      await this.subscriptions.setPath(nextSubscriptionsPath, nextIdentityPath);
+
+      this.saves.dispose();
+      this.saves = this.makeSaveService(nextSavedFolder);
+      this.saves.start();
+
+      await this.reconcileSources(this.subscriptions.getSnapshot().document.feeds);
+      this.refreshViews();
+      new Notice(t("Switched Feed Reader root folder to {folder}", { folder: nextRoot }));
+    } finally {
+      this.switchingPath = false;
+    }
+  }
+
+  private refreshViews(): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(SOURCES_VIEW)) {
+      if (leaf.view instanceof SourcesView) leaf.view.refresh();
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType(READER_VIEW)) {
+      if (leaf.view instanceof ReaderView) void leaf.view.refresh();
+    }
   }
 
   async changeSubscriptionsPath(path: string): Promise<void> {
