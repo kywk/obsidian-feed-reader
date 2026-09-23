@@ -8,6 +8,8 @@ Version 0.3.0 adds English and Traditional Chinese interfaces, with automatic Ob
 
 Version 0.4.0 adds compact icon controls, copying original URLs and Markdown links, sticky article titles on wide panes, and a floating Back to top button.
 
+Version 0.4.1 resolves automated review warnings: popout-safe timers, Obsidian element helpers, typed values, and the deprecated XML validator/builder APIs.
+
 ## Status and requirements
 
 The MVP and OPML import/export are implemented. The recorded OPML validation passed the build and 90 regular tests, with one opt-in scale test skipped. OPML has not yet been tested in Obsidian or against real exports from other readers. See [OPML validation](docs/opml-validation.md) and the earlier [MVP validation](docs/history/2026-09-22-rss-reader-mvp/mvp-validation.md) for the scope and limitations of previous checks.

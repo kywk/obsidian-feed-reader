@@ -8,6 +8,8 @@ Obsidian 桌面版 RSS／Atom reader。訂閱、閱讀狀態與保存筆記留�
 
 0.4.0 新增精簡圖示操作列、複製原文網址與 Markdown 連結、寬版固定導覽列標題及回到頁首按鈕。
 
+0.4.1 修正自動審查警告：popout 相容計時器、Obsidian 元素 helper、型別化數值，以及已棄用的 XML validator／builder API。
+
 ## 介面語言
 
 支援英文與繁體中文，涵蓋閱讀器、訂閱管理、設定與命令。在「設定 → Vault Feed Reader → 語言」選擇「跟隨 Obsidian」（預設）、English 或繁體中文；變更後請停用並重新啟用插件。不支援的 Obsidian 語言會使用英文。
