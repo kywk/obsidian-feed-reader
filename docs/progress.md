@@ -53,3 +53,7 @@ OPML 三筆提交的共同驗證在分批前的完整工作區執行：build 通
 ## 0.4.0 閱讀介面與連結操作
 
 精簡來源與文章工具列，新增原文網址／Markdown 連結複製、寬版固定導覽列標題與回到頁首按鈕。發布提交 e26506f；GitHub Release 已公開，obs-feedly 同步完成，官方確認 0.4.0 排入掃描。建置通過，195 tests passed、1 scale skipped；詳見 [發布與驗證紀錄](release-0.4.0.md)。
+
+## 0.4.0 審查警告修正（未發布）
+
+依官方 0.4.0 掃描的 46 項 Warnings 修正 timer popout 相容性、globalThis、createEl、unsafe any、多餘 assertion、escape／control regex 與 deprecated XML API；以 `eslint-plugin-obsidianmd` 重現後僅餘 1 項 `prefer-setting-definitions`（需 Obsidian 1.13 宣告式 API）。新增 `fast-xml-validator`、`fast-xml-builder` 依賴。驗證與未修正項見[審查修正與驗證](community-review-validation.md)。
