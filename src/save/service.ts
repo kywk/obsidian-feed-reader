@@ -30,6 +30,7 @@ export class ArticleSaveService {
   private readonly keyByPath = new Map<string, string>();
   private readonly inFlight = new Map<string, Promise<SaveArticleResult>>();
   private readonly reservedPaths = new Set<string>();
+  private readonly listeners = new Set<() => void>();
   private stopWatching?: () => void;
 
   constructor(
@@ -38,6 +39,17 @@ export class ArticleSaveService {
   ) {
     this.folder = normalizeFolder(options.folder);
     this.now = options.now ?? (() => new Date());
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) {
+      try { listener(); } catch {}
+    }
   }
 
   start(): void {
@@ -55,6 +67,7 @@ export class ArticleSaveService {
     this.byKey.clear();
     this.keyByPath.clear();
     for (const note of this.storage.list()) this.index(note);
+    this.notify();
   }
 
   listSaved(): SavedArticle[] {
@@ -81,6 +94,10 @@ export class ArticleSaveService {
   findSaved(feedId: string, articleId: string): SavedArticle | undefined {
     this.ensureStarted();
     return this.resolveExisting(articleKey(feedId, articleId));
+  }
+
+  isSaved(feedId: string, articleId: string): boolean {
+    return this.findSaved(feedId, articleId) !== undefined;
   }
 
   save(article: Article, source: FeedSource): Promise<SaveArticleResult> {
@@ -130,6 +147,7 @@ export class ArticleSaveService {
       try {
         await this.storage.create(note.path, contents);
         this.index(note);
+        this.notify();
         return { created: true, note: { ...note } };
       } catch (error) {
         if (!this.storage.exists(note.path)) throw error;
@@ -189,10 +207,12 @@ export class ArticleSaveService {
   private applyChange(change: SavedNoteChange): void {
     if (change.type === 'upsert') {
       this.index(change.note);
+      this.notify();
       return;
     }
     if (change.type === 'delete') {
       this.removePath(change.path);
+      this.notify();
       return;
     }
 
@@ -203,5 +223,6 @@ export class ArticleSaveService {
     if (!note) return;
     note.path = change.newPath;
     this.keyByPath.set(change.newPath, key);
+    this.notify();
   }
 }

@@ -288,4 +288,33 @@ describe('ArticleSaveService', () => {
     expect(markdown).toContain('# &lt;img src=x onerror=bad\\(\\)&gt; \\!\\[\\[secret\\]\\] \\# heading');
     expect(markdown).not.toContain('\n![[secret]]');
   });
+
+  it('notifies subscribers and tracks isSaved state on create, upsert, delete, and rename', async () => {
+    const storage = new MemorySavedNoteStorage();
+    const saver = service(storage);
+    saver.start();
+    const listener = vi.fn();
+    const unsubscribe = saver.subscribe(listener);
+
+    expect(saver.isSaved(source.id, 'article-one')).toBe(false);
+
+    // 1. Create note
+    const result = await saver.save(article({ id: 'article-one' }), source);
+    expect(saver.isSaved(source.id, 'article-one')).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // 2. Rename note
+    storage.emit({ type: 'rename', oldPath: result.note.path, newPath: 'Articles/renamed.md' });
+    expect(saver.isSaved(source.id, 'article-one')).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    // 3. Delete note
+    storage.emit({ type: 'delete', path: 'Articles/renamed.md' });
+    expect(saver.isSaved(source.id, 'article-one')).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(3);
+
+    unsubscribe();
+    storage.emit({ type: 'upsert', note: result.note });
+    expect(listener).toHaveBeenCalledTimes(3);
+  });
 });
