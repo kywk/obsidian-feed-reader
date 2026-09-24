@@ -65,3 +65,9 @@ OPML 三筆提交的共同驗證在分批前的完整工作區執行：build 通
 新增自訂 Feed Reader 根目錄設定（目錄為空時提供搬移既有檔案或建立新來源對話框）、單一 Feed 雜誌風格卡片版面（縮圖、作者、時間、摘要與日期分組）及預設未讀文章列表篩選設定。
 
 版本提交 87f84c2；[GitHub Release 0.5.0](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.5.0) 已公開並設為 Latest，三個附件下載雜湊與本機一致。`npm run build` PASS；`npm test` 215 passed、1 scale skipped。官方 Check for new releases 尚未執行。詳見 [0.5.0 發布紀錄](release-0.5.0.md)。
+
+## 0.6.0 我的最愛、稍候閱讀與介面重整發布
+
+新增 Vault JSON 本地儲存的「我的最愛（Favorite）」與「稍候閱讀（Read Later）」功能（手動移除、離線快取全文）；側邊欄精簡為 Today、Saved、Favorite、Read Later 四項導覽；文章列表頂部區隔狀態篩選與檢視範疇；閱讀工具列改為純圖示並支援保存筆記狀態偵測；重整中英文 README 為 5 大簡明章節。
+
+版本提交 `6b7cb36`；[GitHub Release 0.6.0](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.6.0) 已公開並設為 Latest，三個附件下載雜湊與本機一致。`npm run build` PASS；`npm test` 226 passed、1 scale skipped。官方 Check for new releases 尚未執行。詳見 [0.6.0 發布紀錄](release-0.6.0.md)。

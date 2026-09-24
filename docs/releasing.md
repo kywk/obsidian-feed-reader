@@ -67,3 +67,7 @@ Git remote 已設定為 [kywk/obsidian-feed-reader](https://github.com/kywk/obsi
 ## 0.5.0
 
 根目錄變更與搬移對話框、單一 Feed 雜誌風格卡片版面及預設未讀清單篩選設定已發布至 [GitHub Release](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.5.0)，三個附件雜湊比對一致；tag 與 manifest 同為 `0.5.0`。尚未於官方管理頁執行 Check for new releases。詳見 [0.5.0 發布紀錄](release-0.5.0.md)。
+
+## 0.6.0
+
+我的最愛與稍候閱讀本地清單（Vault JSON）、側邊欄四項快速導覽、文章列表篩選與視圖分組、純圖示閱讀工具列與筆記保存狀態偵測，以及重整中英文 5 大簡明章節 README 已發布至 [GitHub Release](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.6.0)，三個附件雜湊比對一致；tag 與 manifest 同為 `0.6.0`。尚未於官方管理頁執行 Check for new releases。詳見 [0.6.0 發布紀錄](release-0.6.0.md)。
