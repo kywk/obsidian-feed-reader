@@ -114,3 +114,17 @@ OPML 匯入／匯出沿用訂閱管理頁及 merge／replace 流程，不改變 
 ## S8 補充：AI 主題標籤（2026-09-22）
 
 單獨摘要與全文加摘要命令於同次 CLI 請求產生摘要和 3–5 個主題 tags，以 JSON summary/tags 回傳。驗證後摘要及標籤原子套用：tags 與既有文字／文字清單合併、忽略大小寫去重，不刪既有標籤；無 Properties 則建立。保留其他 Properties 與非目標正文。格式錯誤／既有 tags 不是文字或文字清單時保留原筆記並提示，不部分寫入。單獨擷取全文不生成 tags；摘要為背景擷取時仍不寫全文。
+
+## S9 我的最愛、稍候閱讀與介面導覽調整（2026-09-25）
+
+- 儲存技術：採用 Vault 內的 JSON 檔案持久化，路徑隨 rootFolder 預設為 `${rootFolder}/state/favorites.json` 與 `${rootFolder}/state/read-later.json`，支援隨 Vault 打包轉移至另一台電腦。
+- 資料完整性：JSON 條目包含文章 ID、Feed ID、標題、URL、發布/擷取時間、作者、摘要及正文 HTML（`contentHtml`），以供跨電腦或本機快取淘汰時完整離線閱讀。
+- 左側導覽列：僅保留 Today、Saved、Favorite、Read Later 四個全域導覽項目（移除原「全部文章」項目），下方保留來源（Feeds）樹狀清單。
+- 列表上方篩選／導覽按鈕：依序呈現兩組按鈕，以分隔線 `|` 區隔：
+  - 狀態篩選組：全部文章（All articles）／未讀（Unread）／已讀（Read）
+  - 分隔符號：`|`
+  - 範圍導覽組：今日（Today）／已保存（Saved）／我的最愛（Favorite）／稍候閱讀（Read Later）
+- 閱讀器動作按鈕：新增「我的最愛 Favorite」（加入/移除切換）與「稍候閱讀 Read Later」（加入/移除切換）。已加入時顯示 active 樣式與移除提示。
+- 稍候閱讀生命週期：Read Later 文章需由使用者手動點擊按鈕移除，不因閱讀而自動移出清單。
+- 保存狀態偵測：工具列的「保存／開啟筆記」按鈕可偵測該文章是否已在 Vault 保存為 Markdown 筆記。若已保存，按鈕呈現 active 樣式與 `bookmark-check` 圖示，提示文字為「開啟已保存筆記」，點擊開啟該筆記；若未保存，呈現 `bookmark` 圖示與提示文字「保存／開啟筆記」，點擊建立並開啟筆記。
+

@@ -119,6 +119,7 @@ export const zhTW = {
   "The article is no longer in the cache.": "此文章已不在快取中。",
   "Open original": "開啟原文",
   "Save / open note": "保存／開啟筆記",
+  "Open saved note": "開啟已保存筆記",
   "Toggle read / unread": "切換已讀／未讀",
   "This source did not provide article content.": "此來源未提供文章內容。",
   "Back to list": "返回列表",
@@ -247,5 +248,15 @@ export const zhTW = {
   "Markdown": "Markdown",
   "Save": "保存",
   "Read / unread": "已讀／未讀",
-  "Back to top": "回到頁首"
+  "Back to top": "回到頁首",
+  "Favorite": "我的最愛",
+  "Read Later": "稍候閱讀",
+  "Add to favorites": "加入我的最愛",
+  "Remove from favorites": "從我的最愛移除",
+  "Added to favorites": "已加入我的最愛",
+  "Removed from favorites": "已從我的最愛移除",
+  "Add to read later": "加入稍候閱讀",
+  "Remove from read later": "從稍候閱讀移除",
+  "Added to read later": "已加入稍候閱讀",
+  "Removed from read later": "已從稍候閱讀移除"
 } as const;

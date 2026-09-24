@@ -343,7 +343,7 @@ it('renders Chinese navigation without translating source names', async () => {
   try {
     await view.onOpen();
     expect(view.getDisplayText()).toBe('RSS 來源');
-    expect(contentEl.textContent).toContain('全部文章');
+    expect(contentEl.textContent).toContain('今日');
     expect(contentEl.textContent).toContain('A feed');
     expect(contentEl.querySelector('[aria-label="展開／收合 My folder"]')).not.toBeNull();
   } finally { await view.onClose(); configureLanguage('en', 'en'); }
@@ -502,6 +502,156 @@ describe('Feed vs folder view layout', () => {
     expect(feedRow.querySelector('.vfr-magazine-author')?.textContent).toContain('TechNews Reporter');
     expect(feedRow.querySelector('.vfr-magazine-snippet')?.textContent).toBe('This is the snippet of the article [...]');
     expect(root.querySelector('.vfr-date-group-header')).not.toBeNull();
+
+    await view.onClose();
+    root.remove();
+  });
+
+  it('detects saved note state on the toolbar action button and updates on save event', async () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+
+    const testItem: ArticleSummary = {
+      id: 'article-save-test',
+      feedId: feed.id,
+      title: 'Save Test Article',
+      publishedAt: '2026-09-24T00:00:00.000Z',
+      firstFetchedAt: '2026-09-24T00:00:00.000Z',
+    };
+
+    let isSaved = false;
+    const saveListeners = new Set<() => void>();
+    const onSaveSubscription = {
+      subscribe: (listener: () => void) => {
+        saveListeners.add(listener);
+        return () => saveListeners.delete(listener);
+      },
+    };
+    const onSaveArticle = vi.fn(async () => {
+      isSaved = true;
+      for (const listener of saveListeners) listener();
+    });
+
+    const cache = {
+      queryMetadata: vi.fn(async () => ({ items: [testItem] })),
+      getArticle: vi.fn(async () => ({ ...testItem, contentHtml: '<p>Content</p>' })),
+    };
+
+    const state = createReaderUiState();
+    const view = new ReaderView({ contentEl: root } as never, {
+      state,
+      cache,
+      subscriptions: {
+        getSnapshot: () => ({
+          document: { version: 1 as const, feeds: [feed], folders: [] },
+          writable: true,
+        }),
+        subscribe: () => () => {},
+      },
+      isArticleSaved: () => isSaved,
+      onSaveSubscription,
+      onSaveArticle,
+    });
+
+    await view.onOpen();
+    state.select({ kind: 'global', filter: 'all' });
+    await vi.waitFor(() => expect(root.querySelectorAll('.vfr-article-row')).toHaveLength(1));
+
+    // Open article
+    const row = root.querySelector<HTMLElement>('.vfr-article-row')!;
+    row.click();
+    await vi.waitFor(() => expect(root.querySelector('.vfr-article-actions')).not.toBeNull());
+
+    // 1. Initial unsaved state: title is "Save / open note", not active
+    const saveBtn = root.querySelectorAll<HTMLButtonElement>('.vfr-article-actions > button')[0]!;
+    expect(saveBtn.getAttribute('title')).toBe('Save / open note');
+    expect(saveBtn.classList.contains('is-active')).toBe(false);
+
+    // 2. Click save: onSaveArticle is called, and after completion button becomes active with "Open saved note"
+    saveBtn.click();
+    await vi.waitFor(() => expect(onSaveArticle).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => {
+      const updatedBtn = root.querySelectorAll<HTMLButtonElement>('.vfr-article-actions > button')[0]!;
+      expect(updatedBtn.getAttribute('title')).toBe('Open saved note');
+      expect(updatedBtn.classList.contains('is-active')).toBe(true);
+    });
+
+    // 3. Delete / unsave external event notification
+    isSaved = false;
+    for (const listener of saveListeners) listener();
+    await vi.waitFor(() => {
+      const updatedBtn = root.querySelectorAll<HTMLButtonElement>('.vfr-article-actions > button')[0]!;
+      expect(updatedBtn.getAttribute('title')).toBe('Save / open note');
+      expect(updatedBtn.classList.contains('is-active')).toBe(false);
+    });
+
+    await view.onClose();
+    root.remove();
+  });
+
+  it('renders all articles / unread / read | today / saved / favorite / read later filter buttons and updates scope', async () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+
+    const state = createReaderUiState();
+    const view = new ReaderView({ contentEl: root } as never, {
+      state,
+      cache: { queryMetadata: async () => ({ items: [] }), getArticle: async () => undefined },
+      subscriptions: {
+        getSnapshot: () => ({ document: { version: 1 as const, feeds: [feed], folders: [] }, writable: true }),
+        subscribe: () => () => {},
+      },
+      userLists: {
+        getFavorites: () => [],
+        getReadLater: () => [],
+        subscribe: () => () => {},
+      } as never,
+    });
+
+    await view.onOpen();
+
+    const buttons = root.querySelectorAll<HTMLButtonElement>('.vfr-filter-actions button');
+    expect(buttons).toHaveLength(7);
+
+    const buttonTexts = [...buttons].map(b => b.textContent);
+    expect(buttonTexts).toEqual([
+      'All articles',
+      'Unread',
+      'Read',
+      'Today',
+      'Saved',
+      'Favorite',
+      'Read Later',
+    ]);
+
+    const divider = root.querySelector<HTMLElement>('.vfr-filter-divider');
+    expect(divider).not.toBeNull();
+    expect(divider?.textContent).toBe('|');
+
+    // Click 'Saved' button -> selects global saved
+    buttons[4]!.click();
+    await Promise.resolve();
+    expect(state.getScope()).toEqual({ kind: 'global', filter: 'saved' });
+
+    // Click 'Favorite' button -> selects global favorite
+    buttons[5]!.click();
+    await Promise.resolve();
+    expect(state.getScope()).toEqual({ kind: 'global', filter: 'favorite' });
+
+    // Click 'Read Later' button -> selects global readLater
+    buttons[6]!.click();
+    await Promise.resolve();
+    expect(state.getScope()).toEqual({ kind: 'global', filter: 'readLater' });
+
+    // Click 'Today' button -> selects global today
+    buttons[3]!.click();
+    await Promise.resolve();
+    expect(state.getScope()).toEqual({ kind: 'global', filter: 'today' });
+
+    // Click 'Unread' button -> selects global unread
+    buttons[1]!.click();
+    await Promise.resolve();
+    expect(state.getScope()).toEqual({ kind: 'global', filter: 'unread' });
 
     await view.onClose();
     root.remove();

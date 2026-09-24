@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, DEFAULT_ROOT_FOLDER, FeedReaderSettingTab, isVaultRel
 import { READER_VIEW, ReaderView, SOURCES_VIEW, SourcesView, createReaderUiState, type ReaderViewDependencies } from './ui/views';
 import { SubscriptionService, VaultSubscriptionStorage, serializeSubscriptions, emptySubscriptionDocument } from './subscriptions';
 import { ReadStateService, VaultReadStateStorage } from './read-state';
+import { UserListsService, VaultUserListStorage } from './user-lists';
 import { IndexedDbArticleCache } from './cache';
 import { FeedRefreshService, createObsidianFeedTransport } from './feeds';
 import { ArticleSaveService, ObsidianSavedNoteStorage } from './save';
@@ -23,6 +24,7 @@ export default class FeedReaderPlugin extends Plugin {
   enrichment?: EnrichmentController;
   private subscriptions!: SubscriptionService;
   private readState!: ReadStateService;
+  private userLists!: UserListsService;
   private cache!: IndexedDbArticleCache;
   private refreshService!: FeedRefreshService;
   private saves!: ArticleSaveService;
@@ -35,6 +37,13 @@ export default class FeedReaderPlugin extends Plugin {
   private reconcileTail: Promise<void> = Promise.resolve();
   private feedErrors = new Map<string, string>();
   private openingManager?: Promise<void>;
+  private readonly saveListeners = new Set<() => void>();
+
+  private notifySaveListeners(): void {
+    for (const listener of this.saveListeners) {
+      try { listener(); } catch {}
+    }
+  }
 
   async onload(): Promise<void> {
     this.stopped = false;
@@ -61,6 +70,8 @@ export default class FeedReaderPlugin extends Plugin {
     const identityPath = `${stateDir}/source-ids.json`;
     this.subscriptions = new SubscriptionService(new VaultSubscriptionStorage(this.app.vault), this.settings.subscriptionsPath, undefined, identityPath);
     this.readState = new ReadStateService(new VaultReadStateStorage(this.app.vault), stateDir);
+    this.userLists = new UserListsService(new VaultUserListStorage(this.app.vault), stateDir);
+    await this.userLists.load();
     this.refreshService = new FeedRefreshService(createObsidianFeedTransport(requestUrl), this.cache);
     this.saves = this.makeSaveService(this.settings.savedArticlesFolder);
     this.saves.start();
@@ -69,9 +80,17 @@ export default class FeedReaderPlugin extends Plugin {
     this.knownSources = new Set(snapshot.document.feeds.map(feed => feed.id));
     this.dependencies = {
       subscriptions: this.subscriptions, cache: this.cache, readState: this.readState,
+      userLists: this.userLists,
       state: createReaderUiState(this.settings.defaultListFilter), markReadOnNavigate: this.settings.markReadOnNavigate,
       defaultListFilter: this.settings.defaultListFilter,
       getSavedArticles: () => this.saves.listSavedArticles(),
+      isArticleSaved: (feedId, articleId) => this.saves.isSaved(feedId, articleId),
+      onSaveSubscription: {
+        subscribe: (listener: () => void) => {
+          this.saveListeners.add(listener);
+          return () => this.saveListeners.delete(listener);
+        },
+      },
       getFeedErrors: () => this.feedErrors,
       onManageSubscriptions: () => this.openManager(),
       onOpenReader: () => this.openReader(),
@@ -96,10 +115,20 @@ export default class FeedReaderPlugin extends Plugin {
       if (id === 'source-ids' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)) return;
       void this.readState.load(id, true).catch(error => this.notice(error));
     };
-    this.registerEvent(this.app.vault.on('create', file => reloadState(file.path)));
-    this.registerEvent(this.app.vault.on('modify', file => reloadState(file.path)));
-    this.registerEvent(this.app.vault.on('delete', file => reloadState(file.path)));
-    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => { reloadState(oldPath); reloadState(file.path); }));
+    const reloadUserList = (path: string): void => {
+      const prefix = `${this.userLists.directory}/`;
+      if (this.stopped || !path.startsWith(prefix) || !path.endsWith('.json')) return;
+      if (path === `${prefix}favorites.json` || path === `${prefix}read-later.json`) {
+        void this.userLists.reloadFile(path);
+      }
+    };
+    this.registerEvent(this.app.vault.on('create', file => { reloadState(file.path); reloadUserList(file.path); }));
+    this.registerEvent(this.app.vault.on('modify', file => { reloadState(file.path); reloadUserList(file.path); }));
+    this.registerEvent(this.app.vault.on('delete', file => { reloadState(file.path); reloadUserList(file.path); }));
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+      reloadState(oldPath); reloadState(file.path);
+      reloadUserList(oldPath); reloadUserList(file.path);
+    }));
     const syncPresence = (): void => { if (!this.stopped) this.scheduler.setPresent(this.app.workspace.getLeavesOfType(READER_VIEW).length > 0); };
     this.registerEvent(this.app.workspace.on('layout-change', syncPresence));
     this.app.workspace.onLayoutReady(syncPresence);
@@ -219,6 +248,7 @@ export default class FeedReaderPlugin extends Plugin {
       await this.saveSettings();
 
       this.readState.setDirectory(nextStateDir);
+      this.userLists?.setDirectory(nextStateDir);
       await this.subscriptions.setPath(nextSubscriptionsPath, nextIdentityPath);
 
       this.saves.dispose();
@@ -255,6 +285,7 @@ export default class FeedReaderPlugin extends Plugin {
       await this.saveSettings();
 
       this.readState.setDirectory(nextStateDir);
+      this.userLists?.setDirectory(nextStateDir);
       await this.subscriptions.setPath(nextSubscriptionsPath, nextIdentityPath);
 
       this.saves.dispose();
@@ -291,6 +322,7 @@ export default class FeedReaderPlugin extends Plugin {
       await this.saveSettings();
 
       this.readState.setDirectory(nextStateDir);
+      this.userLists?.setDirectory(nextStateDir);
       await this.subscriptions.setPath(nextSubscriptionsPath, nextIdentityPath);
 
       this.saves.dispose();
@@ -408,7 +440,9 @@ export default class FeedReaderPlugin extends Plugin {
     if (!this.stopped) await this.app.workspace.revealLeaf(leaf);
   }
   private makeSaveService(folder: string): ArticleSaveService {
-    return new ArticleSaveService(new ObsidianSavedNoteStorage(this.app.vault, this.app.metadataCache), { folder, sanitize: sanitizeArticleHtml, templates: () => this.settings });
+    const service = new ArticleSaveService(new ObsidianSavedNoteStorage(this.app.vault, this.app.metadataCache), { folder, sanitize: sanitizeArticleHtml, templates: () => this.settings });
+    service.subscribe(() => this.notifySaveListeners());
+    return service;
   }
   private async saveArticle(article: Article): Promise<void> {
     const source = this.subscriptions.getSnapshot().document.feeds.find(feed => feed.id === article.feedId);

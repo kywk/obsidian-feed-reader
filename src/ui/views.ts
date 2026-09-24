@@ -6,6 +6,8 @@ import { effectiveArticleTimestamp, isArticleRead, type ReadStateService } from 
 import type { SubscriptionService } from '../subscriptions';
 import { sanitizeArticleFragment } from './content';
 import { articleMarkdownLink } from './links';
+import type { UserListsService } from '../user-lists';
+import type { ArticleSaveService } from '../save';
 
 export const SOURCES_VIEW = 'vault-feed-reader-sources';
 export const READER_VIEW = 'vault-feed-reader-articles';
@@ -22,6 +24,10 @@ export interface ReaderViewDependencies {
   subscriptions?: Pick<SubscriptionService, 'getSnapshot' | 'subscribe'>;
   cache?: Pick<ArticleCache, 'queryMetadata' | 'getArticle'>;
   readState?: Pick<ReadStateService, 'load' | 'markRead' | 'markUnread' | 'markAllRead' | 'subscribe'>;
+  userLists?: UserListsService;
+  saveService?: Pick<ArticleSaveService, 'subscribe' | 'findSaved' | 'isSaved'>;
+  isArticleSaved?: (feedId: string, articleId: string) => boolean;
+  onSaveSubscription?: { subscribe: (listener: () => void) => () => void };
   /** Supplies saved-note metadata, including notes whose cache entry has expired. */
   getSavedArticles?: () => Promise<readonly ArticleSummary[]>;
   /** Save or reveal the note for this article. */
@@ -89,8 +95,12 @@ export class SourcesView extends ItemView {
     this.cleanups = [this.state.subscribe(() => this.updateSelection())];
     const subscriptions = this.dependencies.subscriptions?.subscribe(() => this.refresh());
     const states = this.dependencies.readState?.subscribe(() => this.refresh());
+    const userLists = this.dependencies.userLists?.subscribe(() => this.refresh());
+    const saves = (this.dependencies.saveService?.subscribe ?? this.dependencies.onSaveSubscription?.subscribe)?.(() => this.refresh());
     if (subscriptions) this.cleanups.push(subscriptions);
     if (states) this.cleanups.push(states);
+    if (userLists) this.cleanups.push(userLists);
+    if (saves) this.cleanups.push(saves);
     this.refresh();
   }
   async onClose(): Promise<void> { this.closed = true; ++this.generation; this.cleanups.forEach(fn => fn()); this.cleanups = []; }
@@ -137,8 +147,15 @@ export class SourcesView extends ItemView {
     setIcon(header.createSpan({ cls: 'vfr-nav-icon' }), 'rss');
     header.createSpan({ text: t("Feed Reader"), cls: 'vfr-sidebar-title' });
     const nav = root.createDiv({ cls: 'vfr-navigation', attr: { 'aria-label': t("Reader navigation") } });
-    for (const [filter, icon] of [['today', 'calendar-days'], ['unread', 'circle-dot'], ['saved', 'bookmark'], ['read', 'history']] as const) {
-      this.row(nav, labelForFilter(filter), icon, { kind: 'global', filter });
+    for (const [filter, icon] of [['today', 'calendar-days'], ['saved', 'bookmark'], ['favorite', 'star'], ['readLater', 'clock']] as const) {
+      const button = this.row(nav, labelForFilter(filter), icon, { kind: 'global', filter });
+      if (filter === 'favorite') {
+        const count = this.dependencies.userLists?.getFavorites().length ?? 0;
+        if (count > 0) button.createSpan({ cls: 'vfr-unread-count', text: String(count) });
+      } else if (filter === 'readLater') {
+        const count = this.dependencies.userLists?.getReadLater().length ?? 0;
+        if (count > 0) button.createSpan({ cls: 'vfr-unread-count', text: String(count) });
+      }
     }
     const feedHeading = root.createDiv({ cls: 'vfr-feeds-heading' });
     feedHeading.createSpan({ cls: 'vfr-section-label', text: t('Feeds') });
@@ -148,7 +165,6 @@ export class SourcesView extends ItemView {
     this.action(actions, t("Mark scope read"), 'check-check', () => this.state.requestMarkAllRead(), true);
     if (!snapshot) { root.createEl('p', { text: t("Reader services are not available yet.") }); return; }
     if (snapshot.error) root.createEl('p', { cls: 'vfr-error', text: snapshot.error.message });
-    this.row(root, t("All articles"), 'list-filter', { kind: 'global', filter: 'all' }, snapshot.document.feeds.map(feed => feed.id));
     if (!snapshot.document.feeds.length) root.createEl('p', { cls: 'vfr-empty-sources', text: t("Add your first source to start reading.") });
     const defaultFilter = this.getDefaultListFilter();
     for (const folder of snapshot.document.folders) {
@@ -236,10 +252,13 @@ export class ReaderView extends ItemView {
   private navigationQueue = Promise.resolve();
   private stateError?: string;
   private states = new Map<string, FeedReadState>();
+  private currentArticle?: Article;
   private unsubscribeScope?: () => void;
   private unsubscribeStates?: () => void;
   private unsubscribeSubscriptions?: () => void;
   private unsubscribeBatch?: () => void;
+  private unsubscribeUserLists?: () => void;
+  private unsubscribeSave?: () => void;
 
   constructor(leaf: WorkspaceLeaf, private readonly dependencies: ReaderViewDependencies = {}) {
     super(leaf);
@@ -276,19 +295,35 @@ export class ReaderView extends ItemView {
       this.renderList(); // A read item remains in an already-visible unread list.
     });
     this.unsubscribeSubscriptions = this.dependencies.subscriptions?.subscribe(() => void this.refresh());
+    this.unsubscribeUserLists = this.dependencies.userLists?.subscribe(() => {
+      if (this.closed) return;
+      this.renderList();
+      if (this.currentArticle && this.openedKey === articleKey(this.currentArticle)) {
+        this.renderArticle(this.currentArticle);
+      }
+    });
+    this.unsubscribeSave = (this.dependencies.saveService?.subscribe ?? this.dependencies.onSaveSubscription?.subscribe)?.(() => {
+      if (this.closed) return;
+      if (scopeFilter(this.readerScope) === 'saved') {
+        void this.refresh();
+      }
+      if (this.currentArticle && this.openedKey === articleKey(this.currentArticle)) {
+        this.renderArticle(this.currentArticle);
+      }
+    });
     await this.applyScope(this.readerScope);
   }
   async onClose(): Promise<void> {
     this.closed = true;
-    ++this.loadGeneration; this.openedKey = undefined;
+    ++this.loadGeneration; this.openedKey = undefined; this.currentArticle = undefined;
     this.articleEl?.removeEventListener('scroll', this.updateBackToTop);
     this.backToTop?.remove(); this.backToTop = undefined;
     this.root = undefined; this.listEl = undefined; this.articleEl = undefined;
-    this.unsubscribeScope?.(); this.unsubscribeBatch?.(); this.unsubscribeStates?.(); this.unsubscribeSubscriptions?.();
+    this.unsubscribeScope?.(); this.unsubscribeBatch?.(); this.unsubscribeStates?.(); this.unsubscribeSubscriptions?.(); this.unsubscribeUserLists?.(); this.unsubscribeSave?.();
   }
   private async applyScope(scope: ReaderScope): Promise<void> {
     const generation = ++this.loadGeneration;
-    this.readerScope = scope; this.selectedIndex = -1; this.openedKey = undefined; this.nextCursor = undefined; this.summaries = [];
+    this.readerScope = scope; this.selectedIndex = -1; this.openedKey = undefined; this.currentArticle = undefined; this.nextCursor = undefined; this.summaries = [];
     this.pageHistory = []; this.listScroll = 0; this.showList(false);
     this.renderArticlePlaceholder('Choose an article');
     await this.loadPage(undefined, generation);
@@ -304,6 +339,18 @@ export class ReaderView extends ItemView {
         const offset = cursor?.startsWith('saved:') ? Number(cursor.slice(6)) : 0;
         if (generation !== this.loadGeneration) return;
         this.summaries = [...all].slice(offset, offset + PAGE_SIZE); this.nextCursor = offset + PAGE_SIZE < all.length ? `saved:${offset + PAGE_SIZE}` : undefined;
+      } else if (scopeFilter(scope) === 'favorite') {
+        const favs = this.dependencies.userLists?.getFavorites() ?? [];
+        const all = favs.filter(article => article.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+        const offset = cursor?.startsWith('favorite:') ? Number(cursor.slice(9)) : 0;
+        if (generation !== this.loadGeneration) return;
+        this.summaries = [...all].slice(offset, offset + PAGE_SIZE); this.nextCursor = offset + PAGE_SIZE < all.length ? `favorite:${offset + PAGE_SIZE}` : undefined;
+      } else if (scopeFilter(scope) === 'readLater') {
+        const later = this.dependencies.userLists?.getReadLater() ?? [];
+        const all = later.filter(article => article.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+        const offset = cursor?.startsWith('readLater:') ? Number(cursor.slice(10)) : 0;
+        if (generation !== this.loadGeneration) return;
+        this.summaries = [...all].slice(offset, offset + PAGE_SIZE); this.nextCursor = offset + PAGE_SIZE < all.length ? `readLater:${offset + PAGE_SIZE}` : undefined;
       } else {
         const feedIds = this.scopeFeedIds(this.dependencies.subscriptions.getSnapshot().document, scope);
         await this.loadStates(feedIds);
@@ -365,7 +412,16 @@ export class ReaderView extends ItemView {
     heading.createEl('h1', { text: this.scopeLabel() });
     heading.createEl('p', { cls: 'vfr-list-description', text: t("Choose an article to read · j / k to navigate") });
     const filters = list.createDiv({ cls: 'vfr-filter-actions' });
-    for (const filter of ['all', 'unread', 'read', 'today'] as const) {
+    const statusFilters: ArticleFilter[] = ['all', 'unread', 'read'];
+    const scopeFilters: ArticleFilter[] = ['today', 'saved', 'favorite', 'readLater'];
+
+    for (const filter of statusFilters) {
+      const button = filters.createEl('button', { text: labelForFilter(filter) });
+      button.setAttribute('aria-pressed', String(this.readerScope.filter === filter));
+      button.addEventListener('click', () => this.setScopeFilter(filter));
+    }
+    filters.createSpan({ cls: 'vfr-filter-divider', text: '|', attr: { 'aria-hidden': 'true' } });
+    for (const filter of scopeFilters) {
       const button = filters.createEl('button', { text: labelForFilter(filter) });
       button.setAttribute('aria-pressed', String(this.readerScope.filter === filter));
       button.addEventListener('click', () => this.setScopeFilter(filter));
@@ -493,6 +549,7 @@ export class ReaderView extends ItemView {
   }
   private showList(focus = true): void {
     this.openedKey = undefined;
+    this.currentArticle = undefined;
     this.updateBackToTop();
     if (this.listEl) { this.listEl.hidden = false; this.listEl.scrollTop = this.listScroll; }
     if (this.articleEl) this.articleEl.hidden = true;
@@ -565,9 +622,19 @@ export class ReaderView extends ItemView {
     if (!this.dependencies.cache) return;
     this.openedKey = articleKey(selected); this.showArticle(); this.renderArticlePlaceholder(t("Loading article…"));
     try {
-      const article = await this.dependencies.cache.getArticle(selected.feedId, selected.id);
+      let article = await this.dependencies.cache.getArticle(selected.feedId, selected.id);
+      if (!article) {
+        const stored = this.dependencies.userLists?.getStoredArticle(selected.feedId, selected.id);
+        if (stored && stored.contentHtml) {
+          article = {
+            ...stored,
+            contentHtml: stored.contentHtml,
+          };
+        }
+      }
       if (!article) throw new Error(t("The article is no longer in the cache."));
       if (this.openedKey !== articleKey(selected)) return;
+      this.currentArticle = article;
       this.renderArticle(article); await this.markRead(article);
     } catch (error) { if (!this.closed && this.openedKey === articleKey(selected)) this.renderArticlePlaceholder(message(error), true); }
   }
@@ -575,37 +642,164 @@ export class ReaderView extends ItemView {
     const container = this.articleEl; if (!container) return;
     container.empty(); this.articleNavigation(container, article.title || t("Untitled article"));
     const reading = container.createDiv({ cls: 'vfr-reading-column' });
-    reading.createEl('p', { cls: 'vfr-article-meta', text: `${this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === article.feedId)?.title ?? ''} · ${formatDate(article)}` });
     reading.createEl('h1', { text: article.title || t("Untitled article") });
+    const sourceTitle = this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === article.feedId)?.title ?? '';
+    let metaText = sourceTitle;
+    if (article.author) {
+      metaText = metaText ? `${metaText} by ${article.author}` : `by ${article.author}`;
+    }
+    const dateTimeStr = formatArticleDateTime(article);
+    if (dateTimeStr) {
+      metaText = metaText ? `${metaText} / ${dateTimeStr}` : dateTimeStr;
+    }
+    reading.createEl('p', { cls: 'vfr-article-meta', text: metaText });
+
     const actions = reading.createDiv({ cls: 'vfr-article-actions' });
     if (article.url && isSafeHttpUrl(article.url)) {
-      const link = actions.createEl('a', { text: t("Original"), href: article.url, attr: { title: t("Open original"), 'aria-label': t("Open original") } });
-      link.setAttribute('target', '_blank'); link.setAttribute('rel', 'noopener noreferrer');
+      // 1. open original
+      const link = actions.createEl('a', {
+        cls: 'clickable-icon vfr-action-btn',
+        href: article.url,
+        attr: { title: t("Open original"), 'aria-label': t("Open original") }
+      });
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener noreferrer');
       addActionIcon(link, 'external-link');
-      const copy = (text: string, label: string, icon: string, value: string): void => {
-        const button = actions.createEl('button', { text, attr: { title: label, 'aria-label': label } });
-        addActionIcon(button, icon);
-        button.addEventListener('click', () => {
-          void (async () => {
-            button.disabled = true;
-            try {
-              await button.ownerDocument.defaultView!.navigator.clipboard.writeText(value);
-              if (!this.closed) new Notice(t('Copied to clipboard'));
-            } catch {
-              if (!this.closed) new Notice(t('Could not copy to clipboard. Please try again.'));
-            } finally { button.disabled = false; }
-          })();
-        });
-      };
-      copy(t('URL'), t('Copy original URL'), 'copy', article.url);
-      copy(t('Markdown'), t('Copy Markdown link'), 'link', articleMarkdownLink(article.title || t('Untitled article'), article.url));
+
+      // 2. copy link
+      const copyUrlBtn = actions.createEl('button', {
+        cls: 'clickable-icon vfr-action-btn',
+        attr: { title: t("Copy original URL"), 'aria-label': t("Copy original URL") }
+      });
+      addActionIcon(copyUrlBtn, 'link');
+      copyUrlBtn.addEventListener('click', () => {
+        void (async () => {
+          copyUrlBtn.disabled = true;
+          try {
+            await copyUrlBtn.ownerDocument.defaultView!.navigator.clipboard.writeText(article.url!);
+            if (!this.closed) new Notice(t('Copied to clipboard'));
+          } catch {
+            if (!this.closed) new Notice(t('Could not copy to clipboard. Please try again.'));
+          } finally { copyUrlBtn.disabled = false; }
+        })();
+      });
+
+      // 3. copy markdown link
+      const copyMdBtn = actions.createEl('button', {
+        cls: 'clickable-icon vfr-action-btn',
+        attr: { title: t("Copy Markdown link"), 'aria-label': t("Copy Markdown link") }
+      });
+      addActionIcon(copyMdBtn, 'file-text');
+      copyMdBtn.addEventListener('click', () => {
+        void (async () => {
+          copyMdBtn.disabled = true;
+          try {
+            const md = articleMarkdownLink(article.title || t('Untitled article'), article.url!);
+            await copyMdBtn.ownerDocument.defaultView!.navigator.clipboard.writeText(md);
+            if (!this.closed) new Notice(t('Copied to clipboard'));
+          } catch {
+            if (!this.closed) new Notice(t('Could not copy to clipboard. Please try again.'));
+          } finally { copyMdBtn.disabled = false; }
+        })();
+      });
     }
-    const save = actions.createEl('button', { text: t("Save"), attr: { title: t("Save / open note"), 'aria-label': t("Save / open note") } });
-    addActionIcon(save, 'bookmark');
-    save.addEventListener('click', () => void Promise.resolve(this.dependencies.onSaveArticle?.(article)).catch(error => this.showError(error)));
-    const read = actions.createEl('button', { text: t("Read / unread"), attr: { title: t("Toggle read / unread"), 'aria-label': t("Toggle read / unread") } });
-    addActionIcon(read, 'check-check');
-    read.addEventListener('click', () => void this.toggleRead().catch(error => this.showError(error)));
+
+    // 4. save,open note
+    const isSaved = this.dependencies.isArticleSaved?.(article.feedId, article.id)
+      ?? this.dependencies.saveService?.isSaved(article.feedId, article.id)
+      ?? false;
+    const saveBtn = actions.createEl('button', {
+      cls: `clickable-icon vfr-action-btn${isSaved ? ' is-active' : ''}`,
+      attr: {
+        title: isSaved ? t("Open saved note") : t("Save / open note"),
+        'aria-label': isSaved ? t("Open saved note") : t("Save / open note"),
+      },
+    });
+    addActionIcon(saveBtn, isSaved ? 'bookmark-check' : 'bookmark');
+    saveBtn.addEventListener('click', () => {
+      void (async () => {
+        saveBtn.disabled = true;
+        try {
+          await this.dependencies.onSaveArticle?.(article);
+          if (!this.closed) this.renderArticle(article);
+        } catch (error) {
+          this.showError(error);
+        } finally {
+          saveBtn.disabled = false;
+        }
+      })();
+    });
+
+    // 5. add to favorite
+    const userLists = this.dependencies.userLists;
+    if (userLists) {
+      const isFav = userLists.isFavorite(article.feedId, article.id);
+      const favBtn = actions.createEl('button', {
+        cls: `clickable-icon vfr-action-btn${isFav ? ' is-active' : ''}`,
+        attr: {
+          title: isFav ? t("Remove from favorites") : t("Add to favorites"),
+          'aria-label': isFav ? t("Remove from favorites") : t("Add to favorites"),
+        },
+      });
+      addActionIcon(favBtn, 'star');
+      favBtn.addEventListener('click', () => {
+        void (async () => {
+          favBtn.disabled = true;
+          try {
+            const added = await userLists.toggleFavorite(article, article.contentHtml);
+            if (!this.closed) {
+              new Notice(added ? t("Added to favorites") : t("Removed from favorites"));
+              this.renderArticle(article);
+            }
+          } catch (error) {
+            this.showError(error);
+          } finally {
+            favBtn.disabled = false;
+          }
+        })();
+      });
+
+      // 6. add to read later
+      const isLater = userLists.isReadLater(article.feedId, article.id);
+      const laterBtn = actions.createEl('button', {
+        cls: `clickable-icon vfr-action-btn${isLater ? ' is-active' : ''}`,
+        attr: {
+          title: isLater ? t("Remove from read later") : t("Add to read later"),
+          'aria-label': isLater ? t("Remove from read later") : t("Add to read later"),
+        },
+      });
+      addActionIcon(laterBtn, 'clock');
+      laterBtn.addEventListener('click', () => {
+        void (async () => {
+          laterBtn.disabled = true;
+          try {
+            const added = await userLists.toggleReadLater(article, article.contentHtml);
+            if (!this.closed) {
+              new Notice(added ? t("Added to read later") : t("Removed from read later"));
+              this.renderArticle(article);
+            }
+          } catch (error) {
+            this.showError(error);
+          } finally {
+            laterBtn.disabled = false;
+          }
+        })();
+      });
+    }
+
+    // 7. toggle read/unread
+    const isRead = this.articleRead(article);
+    const readBtn = actions.createEl('button', {
+      cls: `clickable-icon vfr-action-btn${isRead ? ' is-active' : ''}`,
+      attr: { title: t("Toggle read / unread"), 'aria-label': t("Toggle read / unread") }
+    });
+    addActionIcon(readBtn, 'check-check');
+    readBtn.addEventListener('click', () => {
+      void (async () => {
+        await this.toggleRead();
+        if (!this.closed) this.renderArticle(article);
+      })().catch(error => this.showError(error));
+    });
     const body = reading.createDiv({ cls: 'vfr-article-body markdown-rendered' });
     body.append(sanitizeArticleFragment(article.contentHtml, this.sourceUrl(article.feedId)));
     for (const link of body.querySelectorAll('a[href]')) {
@@ -690,16 +884,32 @@ export class ReaderView extends ItemView {
     await this.refresh();
   }
   private showError(error: unknown): void { if (!this.closed) { this.stateError = message(error); this.renderList(); new Notice(this.stateError); } }
-  private setScopeFilter(filter: ListFilter): void {
-    if (this.readerScope.kind === 'global') this.state.select({ kind: 'global', filter });
-    else if (this.readerScope.kind === 'feed') this.state.select({ ...this.readerScope, filter });
-    else this.state.select({ ...this.readerScope, filter });
+  private setScopeFilter(filter: ArticleFilter): void {
+    if (filter === 'saved' || filter === 'favorite' || filter === 'readLater') {
+      this.state.select({ kind: 'global', filter });
+    } else if (this.readerScope.kind === 'feed') {
+      this.state.select({ ...this.readerScope, filter });
+    } else if (this.readerScope.kind === 'folder') {
+      this.state.select({ ...this.readerScope, filter });
+    } else {
+      this.state.select({ kind: 'global', filter });
+    }
   }
 }
 
 function articleKey(article: ArticleSummary): string { return `${article.feedId}\u0000${article.id}`; }
 function scopeFilter(scope: ReaderScope): ArticleFilter { return scope.filter; }
-function labelForFilter(filter: ArticleFilter): string { return ({ all: t("All articles"), unread: t("Unread"), read: t("Read"), today: t("Today"), saved: t("Saved") })[filter]; }
+function labelForFilter(filter: ArticleFilter): string {
+  return ({
+    all: t("All articles"),
+    unread: t("Unread"),
+    read: t("Read"),
+    today: t("Today"),
+    saved: t("Saved"),
+    favorite: t("Favorite"),
+    readLater: t("Read Later"),
+  })[filter];
+}
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function isSafeHttpUrl(value: string): boolean { try { const url = new URL(value); return url.protocol === 'http:' || url.protocol === 'https:'; } catch { return false; } }
 function isEditingTarget(target: EventTarget | null): boolean {
@@ -713,6 +923,18 @@ function isToday(article: ArticleSummary, now = new Date()): boolean {
 function formatDate(article: ArticleSummary): string {
   const date = new Date(effectiveArticleTimestamp(article));
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString(getLocale()) : '';
+}
+
+function formatArticleDateTime(article: ArticleSummary): string {
+  const date = new Date(effectiveArticleTimestamp(article));
+  if (!Number.isFinite(date.getTime())) return '';
+  return date.toLocaleString(getLocale(), {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function formatGroupDate(article: ArticleSummary): string {
