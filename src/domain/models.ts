@@ -41,5 +41,15 @@ export interface FeedReadState {
   unreadIds: string[];
 }
 
-export type ArticleFilter = 'all' | 'read' | 'unread' | 'today' | 'saved';
-export type ListFilter = Exclude<ArticleFilter, 'saved'>;
+export type ArticleFilter = 'all' | 'read' | 'unread' | 'today' | 'saved' | 'favorite' | 'readLater';
+export type ListFilter = Exclude<ArticleFilter, 'saved' | 'favorite' | 'readLater'>;
+
+export interface StoredArticleItem extends ArticleSummary {
+  contentHtml?: string;
+  addedAt: string;
+}
+
+export interface StoredArticleDocument {
+  version: 1;
+  items: StoredArticleItem[];
+}
