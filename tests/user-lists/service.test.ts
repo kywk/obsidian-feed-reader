@@ -121,6 +121,10 @@ describe('UserListsService', () => {
     expect(listener).toHaveBeenCalled();
 
     listener.mockClear();
+    // Self-triggered reload with unchanged file content does not emit again
+    await service.reloadFile('state/favorites.json');
+    expect(listener).not.toHaveBeenCalled();
+
     unsubscribe();
     await service.removeFavorite(sampleArticle.feedId, sampleArticle.id);
     expect(listener).not.toHaveBeenCalled();

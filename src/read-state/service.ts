@@ -17,6 +17,45 @@ interface CachedState {
   state: FeedReadState;
   writable: boolean;
   error?: ReadStateError;
+  lastSerialized?: string;
+}
+
+interface CompiledReadState {
+  readIdsRef: string[];
+  unreadIdsRef: string[];
+  readBeforeRef: string | undefined;
+  readSet: Set<string>;
+  unreadSet: Set<string>;
+  readBeforeMs: number | undefined;
+}
+
+const compiledStates = new WeakMap<FeedReadState, CompiledReadState>();
+const parsedArticleTimestamps = new WeakMap<
+  ArticleSummary,
+  { publishedAt: string | undefined; firstFetchedAt: string; ms: number }
+>();
+
+function getCompiledState(state: FeedReadState): CompiledReadState {
+  const cached = compiledStates.get(state);
+  if (
+    cached &&
+    cached.readIdsRef === state.readIds &&
+    cached.unreadIdsRef === state.unreadIds &&
+    cached.readBeforeRef === state.readBefore
+  ) {
+    return cached;
+  }
+  const readBeforeMs = state.readBefore !== undefined ? Date.parse(state.readBefore) : undefined;
+  const compiled: CompiledReadState = {
+    readIdsRef: state.readIds,
+    unreadIdsRef: state.unreadIds,
+    readBeforeRef: state.readBefore,
+    readSet: new Set(state.readIds),
+    unreadSet: new Set(state.unreadIds),
+    readBeforeMs: readBeforeMs !== undefined && Number.isFinite(readBeforeMs) ? readBeforeMs : undefined,
+  };
+  compiledStates.set(state, compiled);
+  return compiled;
 }
 
 function clone(state: FeedReadState): FeedReadState {
@@ -63,11 +102,29 @@ function validate(value: unknown, expectedFeedId: string): FeedReadState {
 }
 
 function timestamp(article: ArticleSummary): number {
+  const cached = parsedArticleTimestamps.get(article);
+  if (
+    cached &&
+    cached.publishedAt === article.publishedAt &&
+    cached.firstFetchedAt === article.firstFetchedAt
+  ) {
+    return cached.ms;
+  }
   const published = article.publishedAt === undefined ? Number.NaN : Date.parse(article.publishedAt);
-  if (Number.isFinite(published)) return published;
-  const fetched = Date.parse(article.firstFetchedAt);
-  if (!Number.isFinite(fetched)) throw new Error(`Article ${article.id} has no valid effective timestamp`);
-  return fetched;
+  let ms: number;
+  if (Number.isFinite(published)) {
+    ms = published;
+  } else {
+    const fetched = Date.parse(article.firstFetchedAt);
+    if (!Number.isFinite(fetched)) throw new Error(`Article ${article.id} has no valid effective timestamp`);
+    ms = fetched;
+  }
+  parsedArticleTimestamps.set(article, {
+    publishedAt: article.publishedAt,
+    firstFetchedAt: article.firstFetchedAt,
+    ms,
+  });
+  return ms;
 }
 
 export function effectiveArticleTimestamp(article: ArticleSummary): string {
@@ -75,9 +132,10 @@ export function effectiveArticleTimestamp(article: ArticleSummary): string {
 }
 
 export function isArticleRead(state: FeedReadState, article: ArticleSummary): boolean {
-  if (state.unreadIds.includes(article.id)) return false;
-  if (state.readIds.includes(article.id)) return true;
-  return state.readBefore !== undefined && timestamp(article) < Date.parse(state.readBefore);
+  const compiled = getCompiledState(state);
+  if (compiled.unreadSet.has(article.id)) return false;
+  if (compiled.readSet.has(article.id)) return true;
+  return compiled.readBeforeMs !== undefined && timestamp(article) < compiled.readBeforeMs;
 }
 
 export class ReadStateService {
@@ -119,7 +177,8 @@ export class ReadStateService {
         const cached = this.cache.get(feedId);
         if (cached) return this.result(cached);
       }
-      const fallback = this.cache.get(feedId)?.state ?? empty(feedId);
+      const existing = this.cache.get(feedId);
+      const fallback = existing?.state ?? empty(feedId);
       const path = this.path(feedId);
       let text: string | null;
       try {
@@ -129,13 +188,16 @@ export class ReadStateService {
         this.cache.set(feedId, entry);
         return this.emit(feedId, entry);
       }
+      if (reload && existing && existing.writable && text !== null && existing.lastSerialized === text) {
+        return this.result(existing);
+      }
       if (text === null) {
         const entry: CachedState = { state: empty(feedId), writable: true };
         this.cache.set(feedId, entry);
         return this.emit(feedId, entry);
       }
       try {
-        const entry: CachedState = { state: validate(JSON.parse(text), feedId), writable: true };
+        const entry: CachedState = { state: validate(JSON.parse(text), feedId), writable: true, lastSerialized: text };
         this.cache.set(feedId, entry);
         return this.emit(feedId, entry);
       } catch (cause) {
@@ -218,14 +280,15 @@ export class ReadStateService {
       const next = clone(entry.state);
       change(next);
       const path = this.path(feedId);
+      const serialized = `${JSON.stringify(next, null, 2)}\n`;
       try {
-        await this.storage.write(path, `${JSON.stringify(next, null, 2)}\n`);
+        await this.storage.write(path, serialized);
       } catch (cause) {
         const result: ReadStateResult = { ok: false, state: clone(entry.state), error: { path, message: 'Could not write read-state', cause } };
         this.notify(feedId, result);
         return result;
       }
-      const updated: CachedState = { state: next, writable: true };
+      const updated: CachedState = { state: next, writable: true, lastSerialized: serialized };
       this.cache.set(feedId, updated);
       return this.emit(feedId, updated);
     });
@@ -238,6 +301,7 @@ export class ReadStateService {
       const entry: CachedState = {
         state: text === null ? empty(feedId) : validate(JSON.parse(text), feedId),
         writable: true,
+        ...(text === null ? {} : { lastSerialized: text }),
       };
       this.cache.set(feedId, entry);
       return entry;

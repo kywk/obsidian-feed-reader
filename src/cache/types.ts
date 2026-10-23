@@ -16,6 +16,7 @@ export interface QueryMetadataOptions {
   feedIds?: readonly string[];
   limit?: number;
   cursor?: string;
+  predicate?: (article: ArticleSummary) => boolean;
 }
 
 export interface ArticleCache {

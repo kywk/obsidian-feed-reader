@@ -72,12 +72,12 @@ export class ArticleSaveService {
 
   listSaved(): SavedArticle[] {
     this.ensureStarted();
-    if ([...this.byKey.values()].some(note => !this.storage.exists(note.path))) {
+    let values = [...this.byKey.values()];
+    if (values.some(note => !this.storage.exists(note.path))) {
       this.rebuildIndex();
+      values = [...this.byKey.values()].filter(note => this.storage.exists(note.path));
     }
-    return [...this.byKey.values()]
-      .filter(note => this.storage.exists(note.path))
-      .sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+    return values.sort((left, right) => right.savedAt.localeCompare(left.savedAt));
   }
 
   async listSavedArticles(): Promise<readonly ArticleSummary[]> {
@@ -197,11 +197,12 @@ export class ArticleSaveService {
     this.keyByPath.set(copy.path, copy.articleKey);
   }
 
-  private removePath(path: string): void {
+  private removePath(path: string): boolean {
     const key = this.keyByPath.get(path);
-    if (!key) return;
+    if (!key) return false;
     this.keyByPath.delete(path);
     if (this.byKey.get(key)?.path === path) this.byKey.delete(key);
+    return true;
   }
 
   private applyChange(change: SavedNoteChange): void {
@@ -211,8 +212,9 @@ export class ArticleSaveService {
       return;
     }
     if (change.type === 'delete') {
-      this.removePath(change.path);
-      this.notify();
+      if (this.removePath(change.path)) {
+        this.notify();
+      }
       return;
     }
 

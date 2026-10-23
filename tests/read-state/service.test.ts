@@ -109,4 +109,19 @@ describe('ReadStateService', () => {
     expect((await service.load('feed-one', true)).ok).toBe(true);
     expect(events).toEqual([false, false, true]);
   });
+
+  it('skips redundant re-emission when reload sees the exact content just persisted by markRead', async () => {
+    const storage = new MemoryStorage();
+    const service = new ReadStateService(storage);
+    let notifications = 0;
+    service.subscribe(() => { notifications += 1; });
+
+    await service.markRead('feed-one', 'article-1');
+    expect(notifications).toBe(1);
+
+    const reloaded = await service.load('feed-one', true);
+    expect(reloaded.ok).toBe(true);
+    expect(reloaded.state.readIds).toEqual(['article-1']);
+    expect(notifications).toBe(1);
+  });
 });

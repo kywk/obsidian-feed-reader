@@ -11,6 +11,26 @@ export interface ParseFeedOptions {
   fetchedAt?: string;
 }
 
+const feedXmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  textNodeName: '#text',
+  removeNSPrefix: true,
+  parseTagValue: false,
+  parseAttributeValue: false,
+  trimValues: false,
+  processEntities: true,
+  ignoreDeclaration: true,
+  ignorePiTags: true,
+});
+
+const contentXmlBuilder = new Builder({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  textNodeName: '#text',
+  suppressEmptyNode: true,
+});
+
 export async function parseFeedXml(
   xml: string,
   options: ParseFeedOptions,
@@ -21,22 +41,10 @@ export async function parseFeedXml(
   } catch (error) {
     throw new Error(`Feed XML could not be parsed: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: '@_',
-    textNodeName: '#text',
-    removeNSPrefix: true,
-    parseTagValue: false,
-    parseAttributeValue: false,
-    trimValues: false,
-    processEntities: true,
-    ignoreDeclaration: true,
-    ignorePiTags: true,
-  });
 
   let document: XmlNode;
   try {
-    document = parser.parse(xml) as XmlNode;
+    document = feedXmlParser.parse(xml) as XmlNode;
   } catch (error) {
     throw new Error('Feed XML could not be parsed', { cause: error });
   }
@@ -194,14 +202,8 @@ function entryContent(entry: XmlNode, kind: 'rss' | 'atom'): string {
   if (elementEntries.length === 0) {
     return directText?.trim() ?? '';
   }
-  const builder = new Builder({
-    ignoreAttributes: false,
-    attributeNamePrefix: '@_',
-    textNodeName: '#text',
-    suppressEmptyNode: true,
-  });
   return elementEntries
-    .map(([key, child]) => builder.build({ [key]: child }))
+    .map(([key, child]) => contentXmlBuilder.build({ [key]: child }))
     .join('')
     .trim();
 }

@@ -313,6 +313,10 @@ describe('ArticleSaveService', () => {
     expect(saver.isSaved(source.id, 'article-one')).toBe(false);
     expect(listener).toHaveBeenCalledTimes(3);
 
+    // 4. Unrelated note delete/metadata change does not notify subscribers
+    storage.emit({ type: 'delete', path: 'Daily/2026-10-23.md' });
+    expect(listener).toHaveBeenCalledTimes(3);
+
     unsubscribe();
     storage.emit({ type: 'upsert', note: result.note });
     expect(listener).toHaveBeenCalledTimes(3);

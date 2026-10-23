@@ -77,6 +77,15 @@ describe('IndexedDbArticleCache', () => {
     expect(selected.items.map((item) => item.id)).toEqual(['b1']);
     expect(first.items[0]).not.toHaveProperty('contentHtml');
     expect(transactionSpy.mock.calls.every(([stores]) => stores === 'article-metadata')).toBe(true);
+
+    transactionSpy.mockClear();
+    const filtered = await cache.queryMetadata({
+      limit: 2,
+      predicate: (item) => item.id === 'a2',
+    });
+    expect(filtered.items.map((item) => item.id)).toEqual(['a2']);
+    expect(filtered.nextCursor).toBeUndefined();
+    expect(transactionSpy).toHaveBeenCalledTimes(1);
   });
 
   it('isolates vaults and deletes only one source partition', async () => {

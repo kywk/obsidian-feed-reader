@@ -106,12 +106,20 @@ export class IndexedDbArticleCache implements ArticleCache {
           ]
         : [this.vaultId, '\uffff', '\uffff', '\uffff'];
     const range = IDBKeyRange.bound(lower, upper, false, Boolean(cursor));
+    const predicate = options.predicate;
+    const includeRecord =
+      selectedFeedIds || predicate
+        ? (record: MetadataRecord): boolean => {
+            if (selectedFeedIds && !selectedFeedIds.has(record.feedId)) {
+              return false;
+            }
+            return predicate ? predicate(toSummary(record)) : true;
+          }
+        : undefined;
     const records = await collectCursor<MetadataRecord>(
       index.openCursor(range, 'prev'),
       limit + 1,
-      selectedFeedIds
-        ? (record) => selectedFeedIds.has(record.feedId)
-        : undefined,
+      includeRecord,
     );
     await completed;
 
@@ -377,17 +385,31 @@ async function evictOldest(
     [vaultId, feedId, '', ''],
     [vaultId, feedId, '\uffff', '\uffff'],
   );
-  let position = 0;
-  await walkCursor<MetadataRecord>(
-    index.openCursor(range, 'prev'),
-    (cursor, record) => {
-      position += 1;
-      if (position > MAX_ARTICLES_PER_FEED) {
-        cursor.delete();
-        contentStore.delete([vaultId, feedId, record.id]);
+  const total = await requestResult(index.count(range));
+  let toDelete = total - MAX_ARTICLES_PER_FEED;
+  if (toDelete <= 0) {
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const request = index.openCursor(range, 'next');
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor || toDelete <= 0) {
+        resolve();
+        return;
       }
-    },
-  );
+      const record = cursor.value as MetadataRecord;
+      cursor.delete();
+      contentStore.delete([vaultId, feedId, record.id]);
+      toDelete -= 1;
+      if (toDelete <= 0) {
+        resolve();
+        return;
+      }
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB cursor failed'));
+  });
 }
 
 function collectCursor<T>(

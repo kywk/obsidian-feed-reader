@@ -57,6 +57,7 @@ function validateDocument(data: unknown, path: string): StoredArticleDocument {
 export class UserListsService {
   private favorites = new Map<string, StoredArticleItem>();
   private readLater = new Map<string, StoredArticleItem>();
+  private lastSerialized = new Map<UserListKind, string | null>();
   private queues = new Map<UserListKind, Promise<void>>();
   private listeners = new Set<() => void>();
   private _directory: string;
@@ -74,6 +75,7 @@ export class UserListsService {
 
   setDirectory(directory: string): void {
     this._directory = directory;
+    this.lastSerialized.clear();
     void this.load();
   }
 
@@ -105,19 +107,23 @@ export class UserListsService {
 
   async reloadFile(filePath: string): Promise<void> {
     if (filePath === this.filePath('favorites')) {
-      await this.loadFile('favorites');
+      await this.loadFile('favorites', true);
     } else if (filePath === this.filePath('read-later')) {
-      await this.loadFile('read-later');
+      await this.loadFile('read-later', true);
     }
   }
 
-  private async loadFile(kind: UserListKind): Promise<void> {
+  private async loadFile(kind: UserListKind, isReload = false): Promise<void> {
     const path = this.filePath(kind);
     try {
       const text = await this.storage.read(path);
+      if (isReload && this.lastSerialized.has(kind) && this.lastSerialized.get(kind) === text) {
+        return;
+      }
       if (text === null) {
         if (kind === 'favorites') this.favorites.clear();
         else this.readLater.clear();
+        this.lastSerialized.set(kind, null);
         this.notify();
         return;
       }
@@ -128,6 +134,7 @@ export class UserListsService {
       for (const item of doc.items) {
         targetMap.set(itemKey(item.feedId, item.id), item);
       }
+      this.lastSerialized.set(kind, text);
       this.notify();
     } catch (cause) {
       // Keep existing memory items on error; do not overwrite corrupt files
@@ -157,6 +164,7 @@ export class UserListsService {
     const doc: StoredArticleDocument = { version: 1, items };
     const content = `${JSON.stringify(doc, null, 2)}\n`;
     await this.storage.write(path, content);
+    this.lastSerialized.set(kind, content);
   }
 
   // --- Favorites ---
