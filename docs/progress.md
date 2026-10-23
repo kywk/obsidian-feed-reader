@@ -71,3 +71,9 @@ OPML 三筆提交的共同驗證在分批前的完整工作區執行：build 通
 新增 Vault JSON 本地儲存的「我的最愛（Favorite）」與「稍候閱讀（Read Later）」功能（手動移除、離線快取全文）；側邊欄精簡為 Today、Saved、Favorite、Read Later 四項導覽；文章列表頂部區隔狀態篩選與檢視範疇；閱讀工具列改為純圖示並支援保存筆記狀態偵測；重整中英文 README 為 5 大簡明章節。
 
 版本提交 `6b7cb36`；[GitHub Release 0.6.0](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.6.0) 已公開並設為 Latest，三個附件下載雜湊與本機一致。`npm run build` PASS；`npm test` 226 passed、1 scale skipped。官方 Check for new releases 尚未執行。詳見 [0.6.0 發布紀錄](release-0.6.0.md)。
+
+## 0.6.1 效能優化發布
+
+優化側邊欄單一來源增量未讀數與使用者清單計數更新、IndexedDB 單次游標 `predicate` 過濾與 `index.count()` 淘汰、`ReadStateService` WeakMap 編譯集合查找與時間戳快取、忽略自身寫入重載與無關 Vault 筆記變更通知，以及 `ReaderView` 列表渲染去重與解析器／格式化器實例重用。
+
+版本提交 `70d4be7`；[GitHub Release 0.6.1](https://github.com/kywk/obsidian-feed-reader/releases/tag/0.6.1) 已公開並設為 Latest，三個附件雜湊與本機一致。`npm run build` PASS；`npm test` 228 passed、1 scale skipped；`npm run test:scale` 2 passed。官方 Check for new releases 尚未執行。詳見 [0.6.1 發布紀錄](release-0.6.1.md)。
