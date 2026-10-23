@@ -94,13 +94,15 @@ export class SourcesView extends ItemView {
     this.closed = false;
     this.cleanups = [this.state.subscribe(() => this.updateSelection())];
     const subscriptions = this.dependencies.subscriptions?.subscribe(() => this.refresh());
-    const states = this.dependencies.readState?.subscribe(() => this.refresh());
-    const userLists = this.dependencies.userLists?.subscribe(() => this.refresh());
-    const saves = (this.dependencies.saveService?.subscribe ?? this.dependencies.onSaveSubscription?.subscribe)?.(() => this.refresh());
+    const states = this.dependencies.readState?.subscribe((feedId, result) => {
+      if (!this.closed) void this.updateSingleFeedCount(feedId, this.generation, result);
+    });
+    const userLists = this.dependencies.userLists?.subscribe(() => {
+      if (!this.closed) this.updateUserListCounts();
+    });
     if (subscriptions) this.cleanups.push(subscriptions);
     if (states) this.cleanups.push(states);
     if (userLists) this.cleanups.push(userLists);
-    if (saves) this.cleanups.push(saves);
     this.refresh();
   }
   async onClose(): Promise<void> { this.closed = true; ++this.generation; this.cleanups.forEach(fn => fn()); this.cleanups = []; }
@@ -109,6 +111,48 @@ export class SourcesView extends ItemView {
     this.render();
     void this.updateCounts(++this.generation);
   }
+  private async countFeedUnread(
+    feedId: string,
+    generation: number,
+    preloaded?: { ok: boolean; state: FeedReadState },
+  ): Promise<number | undefined> {
+    const { cache, readState } = this.dependencies;
+    if (!cache || !readState) return undefined;
+    const result = preloaded ?? await readState.load(feedId);
+    if (!result.ok) return undefined;
+    let cursor: string | undefined, count = 0;
+    do {
+      if (generation !== this.generation || this.closed) return undefined;
+      const page = await cache.queryMetadata({ feedId, limit: 500, cursor });
+      for (const article of page.items) {
+        if (!isArticleRead(result.state, article)) count += 1;
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
+    return count;
+  }
+  private renderCountBadges(): void {
+    for (const badge of this.contentEl.querySelectorAll<HTMLElement>('[data-count-feeds]')) {
+      const ids = JSON.parse(badge.dataset.countFeeds!) as string[];
+      const known = ids.every(id => this.counts.has(id));
+      badge.textContent = known ? String(ids.reduce((sum, id) => sum + this.counts.get(id)!, 0)) : '';
+    }
+  }
+  private async updateSingleFeedCount(
+    feedId: string,
+    generation: number,
+    preloaded?: { ok: boolean; state: FeedReadState },
+  ): Promise<void> {
+    const { subscriptions } = this.dependencies;
+    if (!subscriptions) return;
+    if (!subscriptions.getSnapshot().document.feeds.some(feed => feed.id === feedId)) return;
+    try {
+      const count = await this.countFeedUnread(feedId, generation, preloaded);
+      if (count === undefined || generation !== this.generation || this.closed) return;
+      this.counts.set(feedId, count);
+      this.renderCountBadges();
+    } catch { /* Counts are supplementary; source errors remain visible. */ }
+  }
   private async updateCounts(generation: number): Promise<void> {
     const { cache, readState, subscriptions } = this.dependencies;
     if (!cache || !readState || !subscriptions) return;
@@ -116,25 +160,29 @@ export class SourcesView extends ItemView {
     const counts = new Map<string, number>();
     try {
       for (const feed of feeds) {
-        const result = await readState.load(feed.id);
-        if (!result.ok) continue;
-        let cursor: string | undefined, count = 0;
-        do {
-          if (generation !== this.generation || this.closed) return;
-          const page = await cache.queryMetadata({ feedId: feed.id, limit: 500, cursor });
-          count += page.items.filter(article => !isArticleRead(result.state, article)).length;
-          cursor = page.nextCursor;
-        } while (cursor);
-        counts.set(feed.id, count);
+        const count = await this.countFeedUnread(feed.id, generation);
+        if (generation !== this.generation || this.closed) return;
+        if (count !== undefined) counts.set(feed.id, count);
       }
       if (generation !== this.generation || this.closed) return;
       this.counts = counts;
-      for (const badge of this.contentEl.querySelectorAll<HTMLElement>('[data-count-feeds]')) {
-        const ids = JSON.parse(badge.dataset.countFeeds!) as string[];
-        const known = ids.every(id => counts.has(id));
-        badge.textContent = known ? String(ids.reduce((sum, id) => sum + counts.get(id)!, 0)) : '';
-      }
+      this.renderCountBadges();
     } catch { /* Counts are supplementary; source errors remain visible. */ }
+  }
+  private updateUserListCounts(): void {
+    for (const button of this.contentEl.querySelectorAll<HTMLElement>('[data-user-list-count]')) {
+      const kind = button.dataset.userListCount;
+      const count = kind === 'favorite'
+        ? (this.dependencies.userLists?.getFavorites().length ?? 0)
+        : (this.dependencies.userLists?.getReadLater().length ?? 0);
+      const existing = button.querySelector<HTMLElement>('.vfr-unread-count');
+      if (count > 0) {
+        if (existing) existing.textContent = String(count);
+        else button.createSpan({ cls: 'vfr-unread-count', text: String(count) });
+      } else {
+        existing?.remove();
+      }
+    }
   }
   private getDefaultListFilter(): ListFilter {
     return this.dependencies.defaultListFilter ?? 'unread';
@@ -149,14 +197,11 @@ export class SourcesView extends ItemView {
     const nav = root.createDiv({ cls: 'vfr-navigation', attr: { 'aria-label': t("Reader navigation") } });
     for (const [filter, icon] of [['today', 'calendar-days'], ['saved', 'bookmark'], ['favorite', 'star'], ['readLater', 'clock']] as const) {
       const button = this.row(nav, labelForFilter(filter), icon, { kind: 'global', filter });
-      if (filter === 'favorite') {
-        const count = this.dependencies.userLists?.getFavorites().length ?? 0;
-        if (count > 0) button.createSpan({ cls: 'vfr-unread-count', text: String(count) });
-      } else if (filter === 'readLater') {
-        const count = this.dependencies.userLists?.getReadLater().length ?? 0;
-        if (count > 0) button.createSpan({ cls: 'vfr-unread-count', text: String(count) });
+      if (filter === 'favorite' || filter === 'readLater') {
+        button.dataset.userListCount = filter;
       }
     }
+    this.updateUserListCounts();
     const feedHeading = root.createDiv({ cls: 'vfr-feeds-heading' });
     feedHeading.createSpan({ cls: 'vfr-section-label', text: t('Feeds') });
     const actions = feedHeading.createDiv({ cls: 'vfr-sidebar-tools' });
@@ -330,24 +375,24 @@ export class ReaderView extends ItemView {
   }
   private async loadPage(cursor?: string, generation = ++this.loadGeneration): Promise<void> {
     if (!this.dependencies.cache || !this.dependencies.subscriptions) return this.renderUnavailable();
-    const scope = this.readerScope, query = this.query;
+    const scope = this.readerScope, query = this.query, normalizedQuery = query.toLocaleLowerCase();
     this.loading = true; this.renderList();
     try {
       if (scopeFilter(scope) === 'saved') {
         const saved = await this.dependencies.getSavedArticles?.() ?? [];
-        const all = saved.filter(article => article.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+        const all = normalizedQuery ? saved.filter(article => article.title.toLocaleLowerCase().includes(normalizedQuery)) : saved;
         const offset = cursor?.startsWith('saved:') ? Number(cursor.slice(6)) : 0;
         if (generation !== this.loadGeneration) return;
         this.summaries = [...all].slice(offset, offset + PAGE_SIZE); this.nextCursor = offset + PAGE_SIZE < all.length ? `saved:${offset + PAGE_SIZE}` : undefined;
       } else if (scopeFilter(scope) === 'favorite') {
         const favs = this.dependencies.userLists?.getFavorites() ?? [];
-        const all = favs.filter(article => article.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+        const all = normalizedQuery ? favs.filter(article => article.title.toLocaleLowerCase().includes(normalizedQuery)) : favs;
         const offset = cursor?.startsWith('favorite:') ? Number(cursor.slice(9)) : 0;
         if (generation !== this.loadGeneration) return;
         this.summaries = [...all].slice(offset, offset + PAGE_SIZE); this.nextCursor = offset + PAGE_SIZE < all.length ? `favorite:${offset + PAGE_SIZE}` : undefined;
       } else if (scopeFilter(scope) === 'readLater') {
         const later = this.dependencies.userLists?.getReadLater() ?? [];
-        const all = later.filter(article => article.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+        const all = normalizedQuery ? later.filter(article => article.title.toLocaleLowerCase().includes(normalizedQuery)) : later;
         const offset = cursor?.startsWith('readLater:') ? Number(cursor.slice(10)) : 0;
         if (generation !== this.loadGeneration) return;
         this.summaries = [...all].slice(offset, offset + PAGE_SIZE); this.nextCursor = offset + PAGE_SIZE < all.length ? `readLater:${offset + PAGE_SIZE}` : undefined;
@@ -368,11 +413,18 @@ export class ReaderView extends ItemView {
   }
   private async collectMatchingPage(feedIds: readonly string[], cursor: string | undefined, scope: ReaderScope, query: string): Promise<{ items: ArticleSummary[]; nextCursor?: string }> {
     const matches: ArticleSummary[] = [], seen = new Set<string>();
+    const normalizedQuery = query.toLocaleLowerCase();
+    const predicate = (summary: ArticleSummary): boolean => this.matches(summary, scope, query, normalizedQuery);
     let next = cursor;
     do {
-      const page = await this.dependencies.cache!.queryMetadata({ feedIds, limit: PAGE_SIZE - matches.length, ...(next ? { cursor: next } : {}) });
+      const page = await this.dependencies.cache!.queryMetadata({
+        feedIds,
+        limit: PAGE_SIZE - matches.length,
+        ...(next ? { cursor: next } : {}),
+        predicate,
+      });
       next = page.nextCursor;
-      for (const summary of page.items) if (!seen.has(articleKey(summary)) && this.matches(summary, scope, query)) {
+      for (const summary of page.items) if (!seen.has(articleKey(summary)) && predicate(summary)) {
         seen.add(articleKey(summary)); matches.push(summary); if (matches.length === PAGE_SIZE) break;
       }
     } while (next && matches.length < PAGE_SIZE);
@@ -391,12 +443,14 @@ export class ReaderView extends ItemView {
       if (!result.ok) this.stateError = result.error.message;
     }
   }
-  private matches(article: ArticleSummary, scope: ReaderScope, query: string): boolean {
+  private matches(article: ArticleSummary, scope: ReaderScope, query: string, normalizedQuery = query.toLocaleLowerCase()): boolean {
     const filter = scopeFilter(scope), state = this.states.get(article.feedId);
     const statusMatch = filter === 'read' ? (state ? isArticleRead(state, article) : false)
       : filter === 'unread' ? (state ? !isArticleRead(state, article) : true)
         : filter === 'today' ? isToday(article) : true;
-    return statusMatch && article.title.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+    if (!statusMatch) return false;
+    if (!normalizedQuery) return true;
+    return article.title.toLocaleLowerCase().includes(normalizedQuery);
   }
   private renderList(error?: string): void {
     const list = this.listEl; if (!list) return;
@@ -464,8 +518,7 @@ export class ReaderView extends ItemView {
 
     if (isDetailedView) {
       let lastDateGroup: string | undefined;
-      for (const summary of visible) {
-        const index = this.summaries.indexOf(summary);
+      for (const [index, summary] of visible.entries()) {
         const groupLabel = formatGroupDate(summary);
         if (groupLabel && groupLabel !== lastDateGroup) {
           lastDateGroup = groupLabel;
@@ -520,11 +573,14 @@ export class ReaderView extends ItemView {
         });
       }
     } else {
-      for (const summary of visible) {
-        const index = this.summaries.indexOf(summary);
+      const feeds = this.dependencies.subscriptions?.getSnapshot().document.feeds ?? [];
+      const feedTitleById = new Map(feeds.map(feed => [feed.id, feed.title]));
+      const fallbackTitle = t("Saved article");
+      const untitledTitle = t("Untitled article");
+      for (const [index, summary] of visible.entries()) {
         const row = rows.createEl('button', { cls: `vfr-article-row${index === this.selectedIndex ? ' is-selected' : ''}`, attr: { role: 'option', 'aria-selected': String(index === this.selectedIndex) } });
-        row.createSpan({ cls: 'vfr-article-source', text: this.dependencies.subscriptions?.getSnapshot().document.feeds.find(feed => feed.id === summary.feedId)?.title ?? t("Saved article") });
-        row.createSpan({ cls: 'vfr-article-title', text: summary.title || t("Untitled article") });
+        row.createSpan({ cls: 'vfr-article-source', text: feedTitleById.get(summary.feedId) ?? fallbackTitle });
+        row.createSpan({ cls: 'vfr-article-title', text: summary.title || untitledTitle });
         row.createSpan({ cls: 'vfr-article-date', text: formatDate(summary) });
         if (!this.articleRead(summary)) row.addClass('is-unread');
         row.addEventListener('click', () => { this.selectedIndex = index; void this.openSelected().catch(error => this.showError(error)); });
@@ -837,15 +893,41 @@ export class ReaderView extends ItemView {
   private selected(): ArticleSummary | undefined { return this.selectedIndex < 0 ? undefined : this.summaries[this.selectedIndex]; }
   private articleRead(article: ArticleSummary): boolean { const state = this.states.get(article.feedId); return state ? isArticleRead(state, article) : false; }
   private async markRead(article: ArticleSummary): Promise<void> {
-    const result = await this.dependencies.readState?.markRead(article.feedId, article.id);
-    if (this.closed) return;
-    if (result) { this.states.set(article.feedId, result.state); this.stateError = result.ok ? undefined : result.error.message; } this.renderList();
+    let notified = false;
+    const unsubscribe = this.dependencies.readState?.subscribe((feedId) => {
+      if (feedId === article.feedId) notified = true;
+    });
+    try {
+      const result = await this.dependencies.readState?.markRead(article.feedId, article.id);
+      if (this.closed) return;
+      if (result && !notified) {
+        this.states.set(article.feedId, result.state);
+        this.stateError = result.ok ? undefined : result.error.message;
+        this.renderList();
+      }
+    } finally {
+      unsubscribe?.();
+    }
   }
   private async toggleRead(): Promise<void> {
     const article = this.selected(); if (!article || !this.dependencies.readState) return;
-    const result = this.articleRead(article) ? await this.dependencies.readState.markUnread(article.feedId, article.id) : await this.dependencies.readState.markRead(article.feedId, article.id);
-    if (this.closed) return;
-    this.states.set(article.feedId, result.state); this.stateError = result.ok ? undefined : result.error.message; this.renderList();
+    let notified = false;
+    const unsubscribe = this.dependencies.readState.subscribe((feedId) => {
+      if (feedId === article.feedId) notified = true;
+    });
+    try {
+      const result = this.articleRead(article)
+        ? await this.dependencies.readState.markUnread(article.feedId, article.id)
+        : await this.dependencies.readState.markRead(article.feedId, article.id);
+      if (this.closed) return;
+      if (!notified) {
+        this.states.set(article.feedId, result.state);
+        this.stateError = result.ok ? undefined : result.error.message;
+        this.renderList();
+      }
+    } finally {
+      unsubscribe?.();
+    }
   }
   private async saveSelected(): Promise<void> {
     const summary = this.selected(); if (!summary) return;
@@ -916,25 +998,50 @@ function isEditingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
-function isToday(article: ArticleSummary, now = new Date()): boolean {
-  const date = new Date(effectiveArticleTimestamp(article));
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
-}
-function formatDate(article: ArticleSummary): string {
-  const date = new Date(effectiveArticleTimestamp(article));
-  return Number.isFinite(date.getTime()) ? date.toLocaleDateString(getLocale()) : '';
-}
+let cachedLocale = '';
+let shortDateFormatter: Intl.DateTimeFormat | undefined;
+let dateTimeFormatter: Intl.DateTimeFormat | undefined;
+let groupDateFormatter: Intl.DateTimeFormat | undefined;
+let monthDayFormatter: Intl.DateTimeFormat | undefined;
 
-function formatArticleDateTime(article: ArticleSummary): string {
-  const date = new Date(effectiveArticleTimestamp(article));
-  if (!Number.isFinite(date.getTime())) return '';
-  return date.toLocaleString(getLocale(), {
+function ensureFormatters(locale: string): void {
+  if (cachedLocale === locale && shortDateFormatter) return;
+  cachedLocale = locale;
+  shortDateFormatter = new Intl.DateTimeFormat(locale);
+  dateTimeFormatter = new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
+  groupDateFormatter = new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  monthDayFormatter = new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function isToday(article: ArticleSummary, now = new Date()): boolean {
+  const date = new Date(effectiveArticleTimestamp(article));
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+}
+function formatDate(article: ArticleSummary): string {
+  const date = new Date(effectiveArticleTimestamp(article));
+  if (!Number.isFinite(date.getTime())) return '';
+  ensureFormatters(getLocale());
+  return shortDateFormatter!.format(date);
+}
+
+function formatArticleDateTime(article: ArticleSummary): string {
+  const date = new Date(effectiveArticleTimestamp(article));
+  if (!Number.isFinite(date.getTime())) return '';
+  ensureFormatters(getLocale());
+  return dateTimeFormatter!.format(date);
 }
 
 function formatGroupDate(article: ArticleSummary): string {
@@ -955,11 +1062,8 @@ function formatGroupDate(article: ArticleSummary): string {
     date.getDate() === yesterday.getDate();
   if (isYesterday) return t("Yesterday");
 
-  return date.toLocaleDateString(getLocale(), {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  ensureFormatters(getLocale());
+  return groupDateFormatter!.format(date);
 }
 
 function formatRelativeTime(article: ArticleSummary): string {
@@ -975,7 +1079,8 @@ function formatRelativeTime(article: ArticleSummary): string {
   if (diffMin < 60) return `${diffMin}m`;
   if (diffHour < 24) return `${diffHour}h`;
   if (diffDay < 30) return `${diffDay}d`;
-  return date.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
+  ensureFormatters(getLocale());
+  return monthDayFormatter!.format(date);
 }
 
 function addActionIcon(element: HTMLElement, icon: string): void {

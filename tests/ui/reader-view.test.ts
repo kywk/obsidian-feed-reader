@@ -205,6 +205,48 @@ describe('Source navigation', () => {
     expect(root.querySelector<HTMLElement>('.vfr-folder-children')!.hidden).toBe(true);
     await view.onClose();
   });
+  it('incrementally updates only the changed feed unread count without rebuilding sidebar DOM', async () => {
+    const root = document.createElement('div'); document.body.append(root);
+    const feed2 = { id: 'feed-2', title: 'Second feed', url: 'https://example.test/feed2/', folderIds: ['folder-1'] };
+    let state1: FeedReadState = { version: 1, feedId: feed.id, readIds: [], unreadIds: [] };
+    const state2: FeedReadState = { version: 1, feedId: feed2.id, readIds: [], unreadIds: [] };
+    const listeners = new Set<(feedId: string, result: { ok: true; state: FeedReadState }) => void>();
+    const queryMetadata = vi.fn(async ({ feedId }: { feedId?: string }) => ({
+      items: feedId === feed.id ? [summary(1), summary(2)] : [{ ...summary(3), feedId: feed2.id }],
+    }));
+    const view = new SourcesView({ contentEl: root } as never, {
+      subscriptions: {
+        getSnapshot: () => ({ document: { version: 1, feeds: [feed, feed2], folders: [{ id: 'folder-1', title: 'Folder' }] }, writable: true }),
+        subscribe: () => () => {},
+      },
+      cache: { queryMetadata, getArticle: vi.fn() },
+      readState: {
+        load: async (feedId: string) => ({ ok: true as const, state: feedId === feed.id ? state1 : state2 }),
+        subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+        markRead: vi.fn(), markUnread: vi.fn(), markAllRead: vi.fn(),
+      },
+    });
+    await view.onOpen();
+    await vi.waitFor(() => {
+      const badges = [...root.querySelectorAll<HTMLElement>('[data-count-feeds]')].map(el => el.textContent);
+      expect(badges).toEqual(['3', '2', '1']);
+    });
+    const navElementBefore = root.querySelector('.vfr-sources');
+    queryMetadata.mockClear();
+
+    state1 = { ...state1, readIds: ['article-1'] };
+    for (const listener of listeners) listener(feed.id, { ok: true, state: state1 });
+
+    await vi.waitFor(() => {
+      const badges = [...root.querySelectorAll<HTMLElement>('[data-count-feeds]')].map(el => el.textContent);
+      expect(badges).toEqual(['2', '1', '1']);
+    });
+    expect(queryMetadata).toHaveBeenCalledTimes(1);
+    expect(queryMetadata).toHaveBeenCalledWith(expect.objectContaining({ feedId: feed.id }));
+    expect(root.querySelector('.vfr-sources')).toBe(navElementBefore);
+    await view.onClose();
+    root.remove();
+  });
   it('removes publisher theme overrides while retaining semantic content', () => {
     const clean = sanitizeArticleHtml('<p class="theme-dark" style="color:red" id="app"><font color="red" face="Arial" size="7">Hello</font><strong>World</strong></p>');
     expect(clean).not.toMatch(/class=|style=|id=|color=|face=|size=/);
